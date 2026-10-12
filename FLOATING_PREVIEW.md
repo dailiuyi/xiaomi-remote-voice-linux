@@ -1,6 +1,6 @@
 # MI 语音灵动岛悬浮预览
 
-2026-10-12，elma-ubuntu-pc，Ubuntu KDE Wayland。已升级为高仿苹果灵动岛（Dynamic Island）流体动效与外观形态。
+2026-10-12，elma-ubuntu-pc，Ubuntu KDE Wayland。Qt 悬浮预览采用紧凑胶囊与展开状态。当前动画重复启动问题已通过离屏复现验证；真实观感仍由用户验收。代码复核和运行边界见 [REVIEW.md](REVIEW.md)。
 
 ## 视觉与动效特性（Apple Dynamic Island）
 
@@ -24,36 +24,43 @@
 
 ## 使用
 
-### 1. 桌面快捷方式（一键开关）
+### 1. 桌面快捷方式
 
-桌面上已创建 **「MI 语音输入」**（`mi-voice.desktop`）：
-- **点击一次**：若服务未运行，自动启动语音输入后台与灵动岛悬浮窗，右下角弹出启动提示。
-- **再次点击**：若服务已运行，自动安全关闭语音服务与悬浮窗，右下角弹出关闭提示。
+此前在本机配置了两组桌面入口；快捷方式不在本仓库内，是否存在和可用需现场核对：
+1. **「MI 语音输入」**（`mi-voice.desktop`）：
+   - **单击/双击**：调用开关脚本切换启动/停止；进程检测不等于整套服务健康。
+   - **右键菜单 Actions**：支持显式选择「关闭语音服务」、「启动语音服务」与「重启语音服务」。
+2. **「关闭 MI 语音服务」**（`mi-voice-stop.desktop`）：
+   - **单击/双击**：调用显式停止入口，不转为启动。当前扫描仍存在误匹配，强杀后可能遗漏 ydotoold/pw-record，不能保证整套组件已回收。
 
 ### 2. 命令行控制
 
-保持原有精细命令：
+保持原有精细命令与参数化控制：
 
 ```bash
-# 一键切换开/关（桌面快捷方式同等脚本）
+# 请求停止已识别组件，完成后复查进程（快捷方式对应命令）
+bash /home/elma/文档/ChatGPT/Mi遥控/toggle_dictation.sh --stop
+
+# 显式启动语音服务与悬浮窗
+bash /home/elma/文档/ChatGPT/Mi遥控/toggle_dictation.sh --start
+
+# 一键切换开/关
 bash /home/elma/文档/ChatGPT/Mi遥控/toggle_dictation.sh
 
-# 显示灵动岛悬浮窗（后台 Qwen 服务会自动复用）
+# 查看已识别进程状态，不代表模型和音频就绪
+bash /home/elma/文档/ChatGPT/Mi遥控/toggle_dictation.sh --status
+
+# 独立控制悬浮窗（后台语音服务保持运行）
 bash /home/elma/文档/ChatGPT/Mi遥控/start_floating_preview.sh
-
-# 关闭悬浮窗（识别和输入继续运行）
 bash /home/elma/文档/ChatGPT/Mi遥控/start_floating_preview.sh --stop
-
-# 启动整套流式语音听写（含灵动岛浮窗）
-bash /home/elma/文档/ChatGPT/Mi遥控/start_streaming_dictation.sh
-
-# 停止全部服务与悬浮窗
-bash /home/elma/文档/ChatGPT/Mi遥控/start_streaming_dictation.sh --stop
 ```
 
 ## 验证与证据
 
+以下截图是历史抓取，路径用于定位；当前构建的运行和视觉体验需另行验收。
+
 - 单元测试：`python3 test_floating_preview.py` 通过（覆盖 URL 校验、展开/收缩尺寸、状态机过渡、双击复位）。
+- 补充离屏复现：150 ms 连续提交同状态，1.5 秒内动画启动/完成各 1 次，最终宽度 430；不代替桌面视觉和焦点体验验收。
 - 实时状态证据：`artifacts/floating-preview/current.json`。
 - 视觉渲染抓取：
   - 常态紧凑胶囊：`artifacts/floating-preview/last-compact.png`

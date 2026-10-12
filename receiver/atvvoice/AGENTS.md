@@ -1,5 +1,11 @@
 # AGENTS.md - atvvoice
 
+## Local workspace override (Mi遥控)
+
+This checkout is maintained inside `/home/elma/文档/ChatGPT/Mi遥控` on `elma-ubuntu-pc`. Read the root `AGENTS.md`, `BUILD_RUN.md`, and `REVIEW.md` first. NixOS paths, test device addresses and release steps below are upstream reference material, not authorization to publish or local runtime configuration. Do not push, merge, install a system service or replace historical tested binaries without the user's instruction.
+
+The local RC003 pipeline opts into `--rc003-ms`, 16 kHz ADPCM, 220 ms prebuffer, 0 dB gain and `--frame-timeout 0`. Current notification-error classification and AUDIO_START timer changes passed targeted verification; all-stream EOF and optional-channel closure passed, but RX-only EOF and ready RX tail handling on CTL EOF remain incomplete. Mock/independent tests and historical device acceptance must be reported separately from full Cargo and fresh hardware results. Build output and evidence belong in the ignored root `artifacts/` directory.
+
 ## Project Overview
 
 **atvvoice** is a Rust userspace daemon that captures voice audio from BLE TV remotes using the Google Voice over BLE (ATVV) protocol and exposes it as a PipeWire virtual microphone source on Linux.

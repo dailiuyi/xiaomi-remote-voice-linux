@@ -1,5 +1,7 @@
 # RC003-MS 本地语音输入
 
+本文记录 Whisper medium 阶段的行为与历史验收。当前主入口为 [Qwen 听写](STREAMING.md)，环境恢复见 [BUILD_RUN.md](BUILD_RUN.md)，源码已知问题见 [REVIEW.md](REVIEW.md)。下方“未提交、程序已停止”等对应历史阶段。
+
 2026-10-12，本机 elma-ubuntu-pc / Ubuntu KDE Wayland 已完成“按住说话 → 松开转写 → 当前焦点粘贴”的真实验收。该阶段是本地手动运行版本，没有安装常驻服务或开机自启。
 
 ## 使用

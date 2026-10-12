@@ -28,11 +28,16 @@ def stop_current(metadata_path=RUNTIME/'current.json'):
     if not metadata_path.exists():
         print('No streaming instance recorded')
         return
-    pid = int(json.loads(metadata_path.read_text())['pid'])
+    try:
+        pid = int(json.loads(metadata_path.read_text())['pid'])
+    except Exception:
+        metadata_path.unlink(missing_ok=True)
+        return
     try:
         descriptor = os.pidfd_open(pid)
     except ProcessLookupError:
         print('Recorded streaming instance already stopped')
+        metadata_path.unlink(missing_ok=True)
         return
     try:
         proc = Path(f'/proc/{pid}')
@@ -42,6 +47,7 @@ def stop_current(metadata_path=RUNTIME/'current.json'):
         if not select.select([descriptor], [], [], 10)[0]:
             raise RuntimeError('Stop requested, but exit not confirmed; no forced termination attempted')
         print('Streaming instance stopped normally')
+        metadata_path.unlink(missing_ok=True)
     finally:
         os.close(descriptor)
 

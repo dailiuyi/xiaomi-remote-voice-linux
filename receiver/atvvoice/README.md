@@ -1,5 +1,11 @@
 # ATVVoice
 
+## This checkout: Xiaomi RC003-MS
+
+This repository contains a local RC003-MS compatibility pipeline and the notification/session fixes described in the root [review record](../../REVIEW.md). See [build and runtime instructions](../../BUILD_RUN.md) before using the upstream installation examples below. Local builds do not automatically replace the historical tested binary used by the dictation launcher.
+
+The compatibility mode uses `--rc003-ms --prebuffer-ms 220 --gain 0`; the dictation bridge also uses `--frame-timeout 0 --keep-alive 10`. Previous audio acceptance applies to its recorded binary hash, not to every later build. RX-only EOF and CTL-EOF ready-tail handling remain known gaps.
+
 Linux daemon that captures voice audio from BLE TV remotes using the [Android TV Voice over BLE (ATVV)](https://web.archive.org/web/20260324183034/https://wangefan.github.io/linux_kernel_driver/resources/Google_Voice_over_BLE_spec_v1.0.pdf) protocol and exposes it as a PipeWire virtual microphone.
 
 ### Supported devices

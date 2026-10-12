@@ -1,5 +1,7 @@
 # RC003-MS：Qwen 1.7B 语音预览与最终输入
 
+当前修复和未完成项见 [REVIEW.md](REVIEW.md)，构建、环境恢复及使用新接收器见 [BUILD_RUN.md](BUILD_RUN.md)。下方验收数字和二进制 SHA 均来自早期阶段，不能作为当前构建的验收证据；末尾“保持运行、未提交”等为历史收尾状态。
+
 2026-10-12，主机 elma-ubuntu-pc。已接入一个本地 Qwen3-ASR 1.7B 模型，并完成人工输入验收。当前是手动运行版本，没有安装开机自启或系统常驻服务。
 
 ## 日常使用
@@ -22,7 +24,7 @@ bash /home/elma/文档/ChatGPT/Mi遥控/start_streaming_dictation.sh
 bash /home/elma/文档/ChatGPT/Mi遥控/start_streaming_dictation.sh --stop
 ```
 
-停止命令核对记录的 PID、用户和程序路径，通过 pidfd 发 SIGINT 并等待正常退出；不会终止身份不符的进程，也不会强制杀进程。
+停止函数核对记录的 PID、用户和程序路径，通过 pidfd 发 SIGINT 并等待正常退出，不强制杀进程。但当前 Shell 入口忽略停止异常并返回 0，需复查进程和音源，不能只靠退出码宣布停止。`toggle_dictation.sh --stop` 另有强杀分支，其已知误匹配及子进程回收缺口见 REVIEW.md。
 
 恢复原来 Whisper medium：先运行上面的停止命令，确认成功，再执行：
 

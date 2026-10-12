@@ -221,7 +221,11 @@ pub async fn run_session(
                     Err(_) => anyhow::bail!("audio forwarding channel closed"),
                 }
             }
-            Some(data) = ctl_stream.next() => {
+            item = ctl_stream.next() => {
+                let Some(data) = item else {
+                    tracing::info!("CTL stream ended");
+                    break;
+                };
                 if data.is_empty() {
                     continue;
                 }
@@ -258,6 +262,9 @@ pub async fn run_session(
                         // Reset keepalive timer when streaming starts/restarts
                         if keepalive_enabled {
                             keepalive_timer.as_mut().reset(Instant::now() + keepalive_interval);
+                        }
+                        if frame_timeout_enabled {
+                            frame_timer.as_mut().reset(Instant::now() + timeouts.frame_timeout);
                         }
                     }
                     CtlEvent::StartSearch => {
@@ -324,45 +331,52 @@ pub async fn run_session(
                 }
             }
             // External commands (D-Bus, etc.)
-            Some(cmd) = async {
+            cmd = async {
                 match command_rx.as_mut() {
                     Some(rx) => rx.recv().await,
-                    None => std::future::pending().await,
+                    None => None,
                 }
-            } => {
-                tracing::info!("External command: {:?} (state={:?})", cmd, state);
-                let sid = current_stream_id.unwrap_or(StreamId::MIC_OPEN);
+            }, if command_rx.is_some() => {
                 match cmd {
-                    ExternalCommand::MicOpen => {
-                        if state == State::Connected {
-                            ble.write_command(&protocol.mic_open_cmd()).await?;
-                            tracing::info!("Sent MIC_OPEN (external)");
-                            set_state(State::Opening, &mut state);
-                            if frame_timeout_enabled {
-                                frame_timer.as_mut().reset(Instant::now() + timeouts.frame_timeout);
+                    Some(cmd) => {
+                        tracing::info!("External command: {:?} (state={:?})", cmd, state);
+                        let sid = current_stream_id.unwrap_or(StreamId::MIC_OPEN);
+                        match cmd {
+                            ExternalCommand::MicOpen => {
+                                if state == State::Connected {
+                                    ble.write_command(&protocol.mic_open_cmd()).await?;
+                                    tracing::info!("Sent MIC_OPEN (external)");
+                                    set_state(State::Opening, &mut state);
+                                    if frame_timeout_enabled {
+                                        frame_timer.as_mut().reset(Instant::now() + timeouts.frame_timeout);
+                                    }
+                                }
+                            }
+                            ExternalCommand::MicClose => {
+                                if state == State::Streaming || state == State::Opening {
+                                    ble.write_command(&protocol.mic_close_cmd(sid)).await?;
+                                    tracing::info!("Sent MIC_CLOSE (external)");
+                                    close_mic_reset!(state, last_seq, current_stream_id);
+                                }
+                            }
+                            ExternalCommand::MicToggle => {
+                                if state == State::Streaming || state == State::Opening {
+                                    ble.write_command(&protocol.mic_close_cmd(sid)).await?;
+                                    tracing::info!("Sent MIC_CLOSE (external toggle)");
+                                    close_mic_reset!(state, last_seq, current_stream_id);
+                                } else if state == State::Connected {
+                                    ble.write_command(&protocol.mic_open_cmd()).await?;
+                                    tracing::info!("Sent MIC_OPEN (external toggle)");
+                                    set_state(State::Opening, &mut state);
+                                    if frame_timeout_enabled {
+                                        frame_timer.as_mut().reset(Instant::now() + timeouts.frame_timeout);
+                                    }
+                                }
                             }
                         }
                     }
-                    ExternalCommand::MicClose => {
-                        if state == State::Streaming || state == State::Opening {
-                            ble.write_command(&protocol.mic_close_cmd(sid)).await?;
-                            tracing::info!("Sent MIC_CLOSE (external)");
-                            close_mic_reset!(state, last_seq, current_stream_id);
-                        }
-                    }
-                    ExternalCommand::MicToggle => {
-                        if state == State::Streaming || state == State::Opening {
-                            ble.write_command(&protocol.mic_close_cmd(sid)).await?;
-                            tracing::info!("Sent MIC_CLOSE (external toggle)");
-                            close_mic_reset!(state, last_seq, current_stream_id);
-                        } else if state == State::Connected {
-                            ble.write_command(&protocol.mic_open_cmd()).await?;
-                            tracing::info!("Sent MIC_OPEN (external toggle)");
-                            set_state(State::Opening, &mut state);
-                            if frame_timeout_enabled {
-                                frame_timer.as_mut().reset(Instant::now() + timeouts.frame_timeout);
-                            }
-                        }
+                    None => {
+                        command_rx = None;
                     }
                 }
             }
@@ -370,25 +384,30 @@ pub async fn run_session(
             event = async {
                 match consumer_rx.as_mut() {
                     Some(rx) => rx.recv().await,
-                    None => std::future::pending::<Option<consumer::ConsumerEvent>>().await,
+                    None => None,
                 }
-            } => {
-                if let Some(consumer::ConsumerEvent::Changed(count)) = event {
-                    if mic_on_demand {
-                        if count > 0 && state == State::Connected {
-                            ble.write_command(&protocol.mic_open_cmd()).await?;
-                            tracing::info!("Sent MIC_OPEN (consumer connected, on-demand)");
-                            set_state(State::Opening, &mut state);
-                            if frame_timeout_enabled {
-                                frame_timer.as_mut().reset(Instant::now() + timeouts.frame_timeout);
+            }, if consumer_rx.is_some() => {
+                match event {
+                    Some(consumer::ConsumerEvent::Changed(count)) => {
+                        if mic_on_demand {
+                            if count > 0 && state == State::Connected {
+                                ble.write_command(&protocol.mic_open_cmd()).await?;
+                                tracing::info!("Sent MIC_OPEN (consumer connected, on-demand)");
+                                set_state(State::Opening, &mut state);
+                                if frame_timeout_enabled {
+                                    frame_timer.as_mut().reset(Instant::now() + timeouts.frame_timeout);
+                                }
+                            }
+                            if count == 0 && (state == State::Streaming || state == State::Opening) {
+                                tracing::info!("All consumers disconnected, closing mic");
+                                let sid = current_stream_id.unwrap_or(StreamId::MIC_OPEN);
+                                let _ = ble.write_command(&protocol.mic_close_cmd(sid)).await;
+                                close_mic_reset!(state, last_seq, current_stream_id);
                             }
                         }
-                        if count == 0 && (state == State::Streaming || state == State::Opening) {
-                            tracing::info!("All consumers disconnected, closing mic");
-                            let sid = current_stream_id.unwrap_or(StreamId::MIC_OPEN);
-                            let _ = ble.write_command(&protocol.mic_close_cmd(sid)).await;
-                            close_mic_reset!(state, last_seq, current_stream_id);
-                        }
+                    }
+                    None => {
+                        consumer_rx = None;
                     }
                 }
             }

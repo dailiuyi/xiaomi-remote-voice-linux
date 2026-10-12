@@ -12,7 +12,9 @@ for ASR_OPTION in "$@"; do
   esac
 done
 if [[ "$ASR_STOP" == 1 ]]; then
-  /usr/bin/python3 "$ASR_TASK_ROOT/floating_preview.py" --stop
+  /usr/bin/python3 "$ASR_TASK_ROOT/floating_preview.py" --stop || true
+  /usr/bin/python3 "$ASR_TASK_ROOT/streaming_dictation.py" --stop || true
+  exit 0
 fi
 if [[ "$ASR_FLOAT" == 1 ]]; then
   mkdir -p "$ASR_TASK_ROOT/artifacts/floating-preview"

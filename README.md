@@ -1,5 +1,32 @@
 # Xiaomi RC003-MS 语音输入
 
+当前主入口是 **Qwen3-ASR 1.7B 本地听写与桌面悬浮预览**，Whisper medium 入口保留。链路为：遥控器 → BlueZ/ATVV → PipeWire 专属音源 → 本地模型 → 当前焦点输入框。程序只发送 Ctrl+V，不发送 Enter；两套听写不能同时运行。
+
+运行环境准备好后，按方向键唤醒遥控器，在仓库根目录启动：
+
+```bash
+bash start_streaming_dictation.sh
+```
+
+等待日志出现 `READY`，点击目标输入框，按住说话；松开后保留 900 ms 尾音，再识别完整录音并粘贴一次。预览接口默认监听 `127.0.0.1:18767`，使用每次启动变化的随机路径。浮窗不主动取得焦点，关闭小窗不停止后台。详见 [流式听写](STREAMING.md) 和 [悬浮预览](FLOATING_PREVIEW.md)。
+
+源码不包含模型和虚拟环境。Qwen 环境、模型分别位于 `artifacts/asr-comparison/runtime/venv`、`artifacts/asr-comparison/models/1.7B`；键盘工具位于 `artifacts/dictation-runtime/tools/usr/bin`。构建和恢复步骤见 [BUILD_RUN.md](BUILD_RUN.md)。
+
+启动脚本默认仍引用历史验收二进制 `artifacts/2026-10-12-native-receiver/atvvoice-tested`。重新编译不会自动替换它；使用新构建应显式指定：
+
+```bash
+bash start_streaming_dictation.sh \
+  --receiver "$PWD/artifacts/receiver-build/target/debug/atvvoice"
+```
+
+2026-10-12 复核确认：蓝牙错误分类、AUDIO_START 帧超时、重复状态打断动画三项针对性验证通过；进程归属、启动就绪、强杀子进程回收和 EOF 边界仍部分完成。完整证据和剩余问题见 [REVIEW.md](REVIEW.md)，不能称七项全部修复。
+
+代码维护和操作边界见 [AGENTS.md](AGENTS.md)。模型、录音、转写、运行环境和日志位于被 Git 忽略的 `artifacts/`；本次重建结果记录在 `artifacts/runtime-rebuild/`。运行与人工体验分开验收，历史二进制的试听和输入结果不移用于新构建。
+
+## 历史 Whisper 与 DSP 记录
+
+以下保留早期阶段的验收和收尾记录，其中“本轮”“未提交”“已停止”描述对应当时阶段，不表示当前运行状态。
+
 目前已接通：**按住语音键收音 → 松开后本地转写 → 粘贴到当前焦点输入框**。2026-10-12 已完成真实遥控器和 Codex 内置浏览器输入框验收，用户反馈“文字自动出现”。程序只发送 Ctrl+V，不发送 Enter。
 
 启动前按一下方向键唤醒遥控器，然后在终端运行：

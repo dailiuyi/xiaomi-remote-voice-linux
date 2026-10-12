@@ -127,8 +127,14 @@ async fn ensure_connected(device: &bluer::Device) {
 
 /// Check if an error indicates the device is locked by another instance.
 fn is_device_locked_error(e: &anyhow::Error) -> bool {
+    if let Some(be) = e.downcast_ref::<bluer::Error>() {
+        return matches!(be.kind, bluer::ErrorKind::NotPermitted | bluer::ErrorKind::InProgress);
+    }
+    if let Some(be) = e.root_cause().downcast_ref::<bluer::Error>() {
+        return matches!(be.kind, bluer::ErrorKind::NotPermitted | bluer::ErrorKind::InProgress);
+    }
     let msg = e.to_string();
-    msg.contains("exclusive") || msg.contains("NotPermitted") || msg.contains("InProgress")
+    (msg.contains("NotPermitted") || msg.contains("InProgress")) && !msg.contains("NotConnected")
 }
 
 /// Timeout waiting for CAPS_RESP during negotiation.

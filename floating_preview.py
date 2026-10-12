@@ -31,10 +31,15 @@ def stop_current():
     path = RUNTIME/'current.json'
     if not path.exists():
         return
-    pid = int(json.loads(path.read_text())['pid'])
+    try:
+        pid = int(json.loads(path.read_text())['pid'])
+    except Exception:
+        path.unlink(missing_ok=True)
+        return
     try:
         descriptor = os.pidfd_open(pid)
     except ProcessLookupError:
+        path.unlink(missing_ok=True)
         return
     try:
         proc = Path(f'/proc/{pid}')
@@ -45,6 +50,7 @@ def stop_current():
         signal.pidfd_send_signal(descriptor, signal.SIGINT)
         if not select.select([descriptor], [], [], 5)[0]:
             raise RuntimeError('Preview stop requested but exit not confirmed')
+        path.unlink(missing_ok=True)
     finally:
         os.close(descriptor)
 
@@ -263,7 +269,7 @@ def get_window_class():
             self.move(clamped_left, clamped_top)
 
         def set_expanded_target(self, target_expanded: bool):
-            if self.is_expanded == target_expanded and not self.animating:
+            if self.is_expanded == target_expanded:
                 return
             self.is_expanded = target_expanded
             self.animating = True
