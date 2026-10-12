@@ -8,6 +8,10 @@
 [![UI](https://img.shields.io/badge/UI-PyQt6%20Capsule-green.svg?style=flat-square)](FLOATING_PREVIEW.md)
 [![License](https://img.shields.io/badge/License-MIT%20%2F%20Apache--2.0-lightgrey.svg?style=flat-square)](LICENSE)
 
+<p align="center">
+  <img src="assets/hero.svg" alt="Xiaomi Voice Input for Linux" width="100%">
+</p>
+
 按住遥控器语音键说话，屏幕上方会弹出一个仿灵动岛的黑色半透明悬浮胶囊，实时显示收音波形和当前状态；松开按键，本地大模型立刻开始识别，识别完成后自动通过剪贴板模拟 `Ctrl+V`，把文字打进你当前聚焦的窗口里。
 
 **全链路本地离线推理，不依赖网络，不上传任何语音，隐私完全留在自己的电脑上。**
@@ -36,6 +40,13 @@
 
 ## 系统架构与工作链路
 
+<p align="center">
+  <img src="assets/architecture.svg" alt="System Pipeline &amp; Architecture" width="100%">
+</p>
+
+<details>
+<summary>点击展开原始数据流拓扑 (Mermaid)</summary>
+
 ```mermaid
 flowchart TD
     subgraph 蓝牙与硬件层
@@ -59,6 +70,21 @@ flowchart TD
         Injector -->|模拟 Ctrl+V| ActiveApp["当前输入窗口<br>(编辑器 / 浏览器 / 终端 / 聊天软件)"]
     end
 ```
+
+</details>
+
+---
+
+## 本地 ASR 模型实测与选型
+
+项目主推 **Qwen3-ASR 1.7B**，同时在架构中保留 **Whisper medium** 作为轻量备用方案。以下为在 RTX 4060 Laptop (8GB) 实机环境下，基于小米 RC003-MS 遥控器真实音频录音的同源离线对比：
+
+<p align="center">
+  <img src="assets/benchmark.svg" alt="Qwen vs Whisper Benchmark Comparison" width="100%">
+</p>
+
+- **为什么主选 Qwen3-ASR 1.7B**：在中文开发术语（如函数名、缩写、技术名词）和自然语序断句上表现优异，极少出现同音字小幻觉；且支持高频的增量快照重识别，是驱动桌面灵动岛悬浮波形与动态文字预览的核心。
+- **Whisper medium 的定位**：显存占用较小（约 1.5 ~ 2.1 GB），适合显存较为紧张的机器作为降级备用，但仅支持松开按键后单次离线转写。
 
 ---
 
@@ -121,6 +147,7 @@ bash start_streaming_dictation.sh --receiver "$PWD/artifacts/receiver-build/targ
 ## 仓库结构
 
 ```text
+├── assets/                        # GitHub README 视觉资产 (纯 SVG 原生卡片与图表)
 ├── start_streaming_dictation.sh   # 主入口：启动 Qwen 语音识别与灵动岛悬浮服务
 ├── start_dictation.sh             # 备用入口：启动 Whisper 语音听写服务
 ├── toggle_dictation.sh            # 桌面快捷启停脚本

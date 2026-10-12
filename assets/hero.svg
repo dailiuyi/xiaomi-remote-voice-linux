@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
+  <title id="title">Xiaomi RC003-MS Voice Input for Linux</title>
+  <desc id="desc">Turn your Xiaomi TV Bluetooth remote into a global voice dictation tool on Linux with local ASR and floating preview.</desc>
+
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0e17"/>
+      <stop offset="50%" stop-color="#0f1523"/>
+      <stop offset="100%" stop-color="#080b12"/>
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <linearGradient id="accentGreen" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+    <linearGradient id="capsuleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#182030"/>
+      <stop offset="100%" stop-color="#0b101b"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="1200" height="380" rx="20" fill="url(#bgGrad)"/>
+  <rect width="1198" height="378" x="1" y="1" rx="19" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+
+  <!-- Left: Title & Value Proposition -->
+  <g transform="translate(64, 52)">
+    <!-- Category Badge -->
+    <g transform="translate(0, 0)">
+      <rect width="250" height="26" rx="13" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+      <circle cx="14" cy="13" r="4" fill="#38bdf8"/>
+      <text x="26" y="17" fill="#94a3b8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" letter-spacing="1">XIAOMI RC003-MS · LINUX ATVV</text>
+    </g>
+
+    <!-- Project Title -->
+    <text x="0" y="76" fill="#f8fafc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="44" font-weight="800" letter-spacing="-0.5">Xiaomi Voice Input</text>
+    <text x="0" y="112" fill="url(#primaryGrad)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="28" font-weight="700">for Linux Desktop</text>
+
+    <!-- Subtitle / Hook -->
+    <text x="0" y="154" fill="#cbd5e1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="400">
+      闲置蓝牙遥控器变身随手无线语音话筒 · 长按即说，松开即贴
+    </text>
+    <text x="0" y="180" fill="#64748b" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="400">
+      全链路本地端到端离线推理 · 零隐私泄漏 · 绝不打扰应用焦点
+    </text>
+
+    <!-- Feature Pills -->
+    <g transform="translate(0, 226)">
+      <!-- Pill 1: Qwen ASR -->
+      <g transform="translate(0, 0)">
+        <rect width="136" height="36" rx="8" fill="#131d2e" stroke="#1e293b" stroke-width="1"/>
+        <text x="14" y="22" fill="#38bdf8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600">Qwen3-ASR 1.7B</text>
+      </g>
+      <!-- Pill 2: PipeWire -->
+      <g transform="translate(148, 0)">
+        <rect width="138" height="36" rx="8" fill="#131d2e" stroke="#1e293b" stroke-width="1"/>
+        <text x="14" y="22" fill="#818cf8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600">PipeWire Native</text>
+      </g>
+      <!-- Pill 3: Local Only -->
+      <g transform="translate(298, 0)">
+        <rect width="136" height="36" rx="8" fill="#131d2e" stroke="#1e293b" stroke-width="1"/>
+        <circle cx="20" cy="18" r="4" fill="#10b981"/>
+        <text x="32" y="22" fill="#34d399" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600">100% Offline</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Right: Project Native Material (Hardware Remote & Dynamic Island Preview) -->
+  <g transform="translate(680, 36)">
+    <!-- Decorative Glow Backplate -->
+    <ellipse cx="250" cy="150" rx="190" ry="110" fill="#38bdf8" opacity="0.06" filter="url(#glow)"/>
+
+    <!-- 1. RC003-MS Minimal Remote Silhouette -->
+    <g transform="translate(40, 20)">
+      <!-- Remote Body -->
+      <rect width="112" height="268" rx="28" fill="#161c28" stroke="#334155" stroke-width="2"/>
+      
+      <!-- Power button -->
+      <circle cx="34" cy="34" r="7" fill="#2d3748" stroke="#475569" stroke-width="1.5"/>
+      <path d="M 34 30 L 34 34" stroke="#e2e8f0" stroke-width="1.5" stroke-linecap="round"/>
+
+      <!-- Mic indicator LED -->
+      <circle cx="78" cy="34" r="3" fill="#10b981" filter="url(#glow)"/>
+
+      <!-- D-Pad Outer Ring -->
+      <circle cx="56" cy="100" r="34" fill="#222b3a" stroke="#334155" stroke-width="1.5"/>
+      <circle cx="56" cy="100" r="16" fill="#161c28" stroke="#475569" stroke-width="1"/>
+
+      <!-- Mic / Voice Button (Key Highlight) -->
+      <g transform="translate(56, 164)">
+        <circle cx="0" cy="0" r="18" fill="url(#primaryGrad)" filter="url(#glow)"/>
+        <!-- Mic Icon -->
+        <rect x="-4" y="-8" width="8" height="11" rx="4" fill="#0f172a"/>
+        <path d="M -7 -2 C -7 5, 7 5, 7 -2" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round"/>
+        <line x1="0" y1="5" x2="0" y2="8" stroke="#0f172a" stroke-width="2"/>
+      </g>
+      <text x="56" y="196" fill="#94a3b8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="600" text-anchor="middle">HOLD TO TALK</text>
+
+      <!-- Back / Home / Volume buttons -->
+      <rect x="22" y="214" width="20" height="12" rx="4" fill="#242e3d"/>
+      <rect x="70" y="214" width="20" height="12" rx="4" fill="#242e3d"/>
+      <rect x="46" y="234" width="20" height="14" rx="4" fill="#242e3d"/>
+    </g>
+
+    <!-- Connection Flow Arc -->
+    <path d="M 172 184 C 210 184, 210 100, 246 100" fill="none" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4 4" opacity="0.7"/>
+
+    <!-- 2. Dynamic Island Capsule Preview (UI Proof) -->
+    <g transform="translate(246, 50)">
+      <!-- Capsule Main Container -->
+      <rect width="216" height="196" rx="18" fill="url(#capsuleGrad)" stroke="#38bdf8" stroke-width="1.5" filter="url(#glow)"/>
+
+      <!-- Capsule Title Bar -->
+      <g transform="translate(18, 22)">
+        <circle cx="5" cy="5" r="4" fill="#10b981" filter="url(#glow)"/>
+        <text x="18" y="9" fill="#10b981" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="700" letter-spacing="0.5">LISTENING · 16kHz</text>
+      </g>
+
+      <!-- Waveform Bars -->
+      <g transform="translate(18, 52)">
+        <rect x="0" y="8" width="4" height="18" rx="2" fill="#38bdf8"/>
+        <rect x="8" y="2" width="4" height="28" rx="2" fill="#38bdf8"/>
+        <rect x="16" y="0" width="4" height="34" rx="2" fill="#818cf8"/>
+        <rect x="24" y="6" width="4" height="22" rx="2" fill="#38bdf8"/>
+        <rect x="32" y="10" width="4" height="14" rx="2" fill="#38bdf8"/>
+        <rect x="40" y="3" width="4" height="27" rx="2" fill="#818cf8"/>
+        <rect x="48" y="0" width="4" height="33" rx="2" fill="#818cf8"/>
+        <rect x="56" y="7" width="4" height="20" rx="2" fill="#38bdf8"/>
+        <rect x="64" y="12" width="4" height="10" rx="2" fill="#38bdf8"/>
+        <rect x="72" y="2" width="4" height="28" rx="2" fill="#818cf8"/>
+        <rect x="80" y="5" width="4" height="24" rx="2" fill="#38bdf8"/>
+        <rect x="88" y="11" width="4" height="12" rx="2" fill="#38bdf8"/>
+        <rect x="96" y="1" width="4" height="31" rx="2" fill="#818cf8"/>
+        <rect x="104" y="6" width="4" height="21" rx="2" fill="#38bdf8"/>
+        <rect x="112" y="12" width="4" height="10" rx="2" fill="#38bdf8"/>
+        <rect x="120" y="3" width="4" height="27" rx="2" fill="#818cf8"/>
+        <rect x="128" y="7" width="4" height="19" rx="2" fill="#38bdf8"/>
+        <rect x="136" y="1" width="4" height="30" rx="2" fill="#38bdf8"/>
+        <rect x="144" y="9" width="4" height="15" rx="2" fill="#38bdf8"/>
+        <rect x="152" y="13" width="4" height="8" rx="2" fill="#38bdf8"/>
+        <rect x="160" y="4" width="4" height="25" rx="2" fill="#818cf8"/>
+        <rect x="168" y="8" width="4" height="17" rx="2" fill="#38bdf8"/>
+        <rect x="176" y="12" width="4" height="10" rx="2" fill="#38bdf8"/>
+      </g>
+
+      <!-- Live Transcript Bubble -->
+      <g transform="translate(16, 106)">
+        <rect width="184" height="42" rx="8" fill="#131b28" stroke="#1f2c3f" stroke-width="1"/>
+        <text x="10" y="26" fill="#f1f5f9" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500">
+          请检查当前项目，先运行测试
+        </text>
+      </g>
+
+      <!-- Paste Simulation Footer -->
+      <g transform="translate(18, 170)">
+        <rect width="70" height="16" rx="4" fill="#1e293b"/>
+        <text x="35" y="12" fill="#94a3b8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="700" text-anchor="middle">Ctrl+V Auto</text>
+        <text x="80" y="12" fill="#64748b" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10">No Enter injected</text>
+      </g>
+    </g>
+  </g>
+</svg>
