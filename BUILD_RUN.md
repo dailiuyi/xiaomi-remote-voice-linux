@@ -21,6 +21,7 @@ artifacts/receiver-build/target/debug/atvvoice --help
 
 - Python 3.12 虚拟环境：`artifacts/asr-comparison/runtime/venv`。
 - 固定核心版本：torch/torchaudio 2.9.1、torchvision 0.24.1、qwen-asr 0.0.6、transformers 4.57.6、faster-whisper 1.2.1、dbus-next 0.2.3、opencc-python-reimplemented 0.1.7。
+- 本次恢复环境的完整版本清单已保存为根目录 `streaming-requirements.txt`，包括 NumPy 1.26.4、Gradio 6.17.3，避免解析器反复尝试与原环境不兼容的新组合。新建 Python 3.12 虚拟环境后，使用其 Python 执行 `-m pip install -r streaming-requirements.txt`；对应下载包的官方 PyPI 哈希复核在 `artifacts/runtime-rebuild/package-hashes.json`。该清单针对本机 Linux x86_64/CUDA 环境。
 - 历史版本记录：`artifacts/streaming-runtime/requirements.lock.txt`，是 pip freeze，可能含本机路径或无法重新取得的包，不能不经核对直接整份安装。
 - `download_asr_comparison.py` 固定 Qwen 官方 revision 并校验大小/SHA-256。原脚本准备 0.6B、1.7B 两套模型，当前仅需 1.7B，可按同一 manifest 只恢复 1.7B；不得替换版本。
 - ydotool 工具：`artifacts/dictation-runtime/tools/usr/bin`；系统 PyQt6 用于浮窗。恢复后检查依赖和 CUDA，保留新的 freeze 与下载哈希。
@@ -43,3 +44,12 @@ bash start_streaming_dictation.sh \
 停止优先请求已确认实例正常退出，再检查 receiver、pw-record、ydotoold 和浮窗。开关脚本的已知缺口见 [REVIEW.md](REVIEW.md)。
 
 构建、测试和运行日志，以及源码 commit、二进制 SHA-256、PID 和健康检查，保存在 `artifacts/runtime-rebuild/`。启动、健康检查和人工体验分别报告。
+
+本次实际运行使用临时用户服务 `mi-remote-dictation-current.service`，没有 enable 自启。查看与停止当前实例：
+
+```bash
+systemctl --user status mi-remote-dictation-current.service
+systemctl --user stop mi-remote-dictation-current.service
+```
+
+停止后复查本实例的录音、虚拟键盘、接收器和浮窗。临时 unit 被回收后，重新启动仍按上面的显式新接收器入口执行；桌面开关入口的默认旧二进制不会自动更新。
