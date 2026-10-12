@@ -6,7 +6,7 @@
 
 `build_receiver.sh` 设置项目内的 Rust/Cargo 目录、输出和 pkg-config sysroot。可用项目内链接复用现有 `/home/elma/.rustup`、`/home/elma/.cargo`；不要覆盖已有独立目录。
 
-在 `artifacts/receiver-build/sysroot` 中解压与本机匹配的 libpipewire-0.3-dev、libspa-0.2-dev、libpipewire-0.3-0t64、libdbus-1-dev、libsystemd-dev、libsystemd0、libc6-dev、libc-dev-bin。Ubuntu 26.04 的 dbus-1 pkg-config 还依赖 libsystemd。需要已有 GCC、pkg-config、libclang。局部解压不改变系统安装状态，软件包和日志保存在 `artifacts/receiver-build/`。
+在 `artifacts/receiver-build/sysroot` 中解压与本机匹配的 libpipewire-0.3-dev、libspa-0.2-dev、libpipewire-0.3-0t64、libdbus-1-dev、libdbus-1-3、libsystemd-dev、libsystemd0、libc6-dev、libc-dev-bin。Ubuntu 26.04 的 dbus-1 pkg-config 还依赖 libsystemd；局部 sysroot 必须包含 D-Bus 运行库，避免开发库的动态链接指向缺失文件而退回静态库。需要已有 GCC、pkg-config、libclang。局部解压不改变系统安装状态，软件包和日志保存在 `artifacts/receiver-build/`。
 
 ```bash
 bash build_receiver.sh test --locked
