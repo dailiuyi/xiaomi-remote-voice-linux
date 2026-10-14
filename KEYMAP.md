@@ -27,18 +27,20 @@
 ## 二、架构原理与服务管理
 
 1. **设备隔离机制**：
-   - 规则文件仅绑定设备名 `小米蓝牙语音遥控器`。
+   - 规则文件同时绑定 `MI RC` 与 `小米蓝牙语音遥控器`（系统蓝牙连接时可能呈现两种设备名），实现无感自动识别。
    - 笔记本自带键盘、罗技外接鼠标及其它外设不受任何影响。
 2. **配置文件路径**：
-   - 预设文件：`~/.config/input-remapper/presets/小米蓝牙语音遥控器/vibe_coding.json`
-   - 全局配置：`~/.config/input-remapper/config.json`
-3. **服务状态与启动**：
-   - 后台守护进程：`input-remapper-daemon.service`
-   - 查看运行状态：
+   - 预设文件：`~/.config/input-remapper/presets/MI RC/vibe_coding.json` 及 `~/.config/input-remapper/presets/小米蓝牙语音遥控器/vibe_coding.json`
+   - 全局配置：`~/.config/input-remapper/config.json` 及 `~/.config/input-remapper-2/config.json`
+3. **开机与登录持久化守护**：
+   - 用户级自启服务：`~/.config/systemd/user/input-remapper-autoload.service`（已设为 `enabled`）
+   - 开机或用户登录时，会自动加载上述预设并完成注入，无需手动再次执行启动命令。
+4. **服务状态与手动重载命令**：
+   - 查看后台服务运行状态：
      ```bash
      systemctl status input-remapper-daemon.service
      ```
    - 重新注入预设（如修改配置后）：
      ```bash
-     pkexec input-remapper-control --command stop-all && pkexec input-remapper-control --command start --device "小米蓝牙语音遥控器" --preset "vibe_coding" --config-dir "$HOME/.config/input-remapper"
+     input-remapper-control --command stop-all && input-remapper-control --command autoload --config-dir "$HOME/.config/input-remapper"
      ```
