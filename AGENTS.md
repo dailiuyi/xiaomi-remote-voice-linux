@@ -34,3 +34,11 @@
 - 核对预览 status 接口、专属音源和子进程，不把随机访问路径或口述内容输出到不必要的报告。
 - 分开报告已保存、已提交、已编译、已启动、健康检查和设备/人工验收。历史 115 项 Rust 测试或旧二进制试听不能移用于新构建。
 - 运行回执和日志保存在 `artifacts/`。停止后确认 receiver、recorder、keyboard 均退出，再报告停止成功。
+
+## 自动化配置与环境检查标准
+
+- 环境诊断统一执行 `python3 configure.py status --json`，以此获取机器可读的蓝牙 MAC、按键映射、桌面快捷方式、凭据与接收器就绪状态。
+- 桌面快捷方式与启动脚本维护使用 `python3 configure.py setup-desktop`，确保桌面与应用菜单图标、`~/.local/bin/mi-voice` 入口和 `launcher_dialog.py` 联动且具备 `0755` 权限。
+- 物理按键映射维护使用 `python3 configure.py setup-keymap`，它从 `assets/input-remapper/` 自动同步双设备名（`MI RC` 与 `小米蓝牙语音遥控器`）预设并配置/启用 user systemd 自启服务，严禁手动手写私有 JSON。
+- 密钥配置使用 `python3 configure.py setup-key`，保证落地到 `~/.config/mi-voice/api.key`（`0600` 权限），任何 Agent 严禁在日志、回执或对话中打印或复述密钥明文。
+

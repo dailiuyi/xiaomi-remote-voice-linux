@@ -44,3 +44,18 @@
      ```bash
      input-remapper-control --command stop-all && input-remapper-control --command autoload --config-dir "$HOME/.config/input-remapper"
      ```
+
+---
+
+## 三、一键部署与自动化配置（推荐）
+
+预设与服务模板已随仓库保存在 `assets/input-remapper/` 中。在新机器或由 Agent 配置时，推荐直接使用统一配置工具：
+
+```bash
+# 一键安装双设备名预设并启用开机自启守护：
+python3 configure.py setup-keymap
+
+# 诊断按键映射与蓝牙遥控器连接：
+python3 configure.py status
+```
+

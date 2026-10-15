@@ -58,11 +58,11 @@ flowchart TD
 
 ## 快速上手
 
-### 1. 准备设备和桌面环境
+### 1. 准备设备和基础依赖
 
-当前工作环境为 Ubuntu / KDE，依赖 BlueZ、PipeWire、KDE Klipper 和 ydotool；其他桌面需要自行适配剪贴板与输入路径。本地 Qwen 1.7B 建议使用至少 8 GB 显存的 NVIDIA 显卡，实际可用空间还取决于桌面及其他程序；云端模式不要求 CUDA。
+当前工作环境为 Ubuntu / KDE，依赖 BlueZ、PipeWire、KDE Klipper、ydotool 以及 input-remapper；其他桌面需要自行适配剪贴板与输入路径。本地 Qwen 1.7B 建议使用至少 8 GB 显存的 NVIDIA 显卡，实际可用空间还取决于桌面及其他程序；云端模式不要求 CUDA。
 
-先在系统蓝牙设置中配对 RC003-MS，再按任意方向键唤醒设备。接收器的设备地址及运行资产路径目前带有本机配置，首次在其他机器使用时需按 [构建与运行指南](BUILD_RUN.md) 核对。源码仓库不包含模型、虚拟环境、接收器构建产物或密钥。
+先在系统蓝牙设置中配对 RC003-MS，再按任意方向键唤醒设备。接收器构建、ydotool 工具及系统 PyQt6 的准备方法见 [BUILD_RUN.md](BUILD_RUN.md)。源码仓库不包含模型、虚拟环境、接收器构建产物或密钥。
 
 ### 2. 准备云端 Python 环境
 
@@ -71,24 +71,45 @@ flowchart TD
 ```bash
 python3 -m venv artifacts/cloud-asr/venv
 artifacts/cloud-asr/venv/bin/python -m pip install -r cloud-requirements.txt
-
-# 在自己的终端输入，密钥不会回显或写入命令历史。
-read -rsp '百炼 API Key: ' DASHSCOPE_API_KEY
-echo
-export DASHSCOPE_API_KEY
 ```
 
-默认模型为 `qwen3-asr-flash-realtime`，地域为北京。新加坡账号需加 `--qwen-region singapore` 并使用对应地域的密钥。API Key 只从环境变量读取，不写入源码、日志或回执。
+### 3. 一键安装与配置（推荐）
 
-接收器构建、ydotool 工具及系统 PyQt6 的准备方法见 [BUILD_RUN.md](BUILD_RUN.md)。
-
-### 3. 启动听写
-
-使用已构建的接收器：
+本项目提供统一的配置与诊断工具 `configure.py`，用于一键完成密钥绑定、桌面图标安装与按键映射：
 
 ```bash
-bash start_streaming_dictation.sh --backend qwen-api \
-  --receiver "$PWD/artifacts/receiver-build/target/debug/atvvoice"
+# 1. 导入百炼 API Key（保存至 ~/.config/mi-voice/api.key，权限 600）
+python3 configure.py setup-key
+
+# 2. 一键安装桌面快捷方式、启动入口与 12 键物理按键映射
+python3 configure.py setup-all
+
+# 3. 诊断当前系统环境与就绪状态（支持 --json 机器可读诊断）
+python3 configure.py status
+```
+
+也可根据需要执行分步操作：
+- `python3 configure.py setup-desktop`：仅安装/更新桌面快捷方式与 `~/.local/bin/mi-voice` 启动入口；
+- `python3 configure.py setup-keymap`：仅将按键预设部署到 input-remapper 并启用用户自启服务；
+- 终端临时运行亦可直接 `export DASHSCOPE_API_KEY="你的Key"`。
+
+默认模型为 `qwen3-asr-flash-realtime`，地域为北京。新加坡账号需加 `--qwen-region singapore` 并使用对应地域的密钥。API Key 仅从环境变量或私有文件读取，不写入源码、日志或回执。
+
+### 4. 启动听写
+
+#### 桌面快捷方式（日常推荐）
+
+双击桌面的 **MI 语音输入** 图标，弹出原生模式选择窗口：
+- **云端实时语音**：自动读取 `~/.config/mi-voice/api.key`，免显存，松手秒出字；
+- **本地离线模型**：纯本地推理，不消耗网络，需显存；
+- 点击后自动在后台拉起服务与悬浮窗；如需退出，双击桌面的 **关闭 MI 语音服务** 即可彻底停止。
+
+#### 命令行启动
+
+使用默认配置与已构建接收器：
+
+```bash
+bash start_streaming_dictation.sh --backend qwen-api
 ```
 
 要启用轻度降噪和自动增益，先安装可选依赖，再带参数启动：
@@ -108,7 +129,7 @@ bash start_streaming_dictation.sh --backend local \
   --receiver "$PWD/artifacts/receiver-build/target/debug/atvvoice"
 ```
 
-### 4. 实际使用与验收
+### 5. 实际使用与验收
 
 1. `PCM_READY` / `READY` 表示本地收音链路准备完成，云端鉴权和转写仍需实际按住说话后验证。
 2. 点击一个临时输入框，按住遥控器语音键说话，观察预览。
@@ -130,6 +151,8 @@ bash start_streaming_dictation.sh --backend local \
 | 文件 | 用途 |
 | --- | --- |
 | `start_streaming_dictation.sh` | 云端 / 本地 Qwen 入口及悬浮窗启动 |
+| `configure.py` | 统一配置、桌面部署、按键映射与 Agent 诊断工具 |
+| `launcher_dialog.py` | 桌面快捷方式的 PyQt6 模式选择弹窗 |
 | `streaming_dictation.py` | 按键收音、尾音、最终结果与粘贴流程 |
 | `streaming_qwen.py` | 云端 WebSocket、单次增量上传和结果合并 |
 | `streaming_asr.py` | 本地 Qwen 模型与推理 |

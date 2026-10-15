@@ -51,7 +51,7 @@ bash start_streaming_dictation.sh --backend qwen-api \
   --receiver "$PWD/artifacts/receiver-build/target/debug/atvvoice"
 ```
 
-默认模型 `qwen3-asr-flash-realtime`、地域北京。新加坡账号添加 `--qwen-region singapore`，必须使用对应地域的 Key；固定版本可用 `--qwen-model qwen3-asr-flash-realtime-YYYY-MM-DD`。可选环境变量 `DASHSCOPE_WORKSPACE_ID` 使用业务空间专属域名；未设置时使用仍受支持的 DashScope 公共域名。Key 仅存在于进程环境，不接受命令行密钥参数，不在启动元数据或回执中记录。
+默认模型 `qwen3-asr-flash-realtime`、地域北京。新加坡账号添加 `--qwen-region singapore`，必须使用对应地域的 Key；固定版本可用 `--qwen-model qwen3-asr-flash-realtime-YYYY-MM-DD`。可选环境变量 `DASHSCOPE_WORKSPACE_ID` 使用业务空间专属域名；未设置时使用仍受支持的 DashScope 公共域名。Key 仅存在于进程环境，不接受命令行密钥参数，不在启动元数据或回执中记录；也可将密钥保存至 `~/.config/mi-voice/api.key`（权限 600），启动脚本与桌面启动器会自动读取该配置。
 
 每次按住创建独立 WebSocket，会话配置确认后按 100ms 分包发送 16kHz 单声道 s16le PCM。音频只增量发送一次；服务端 VAD 的多句结果按音频顺序合并。松开后保留 300ms 尾音，发送 `session.finish` 并等待所有最终结果与 `session.finished`。确认完整结果后立即更新面板，然后只粘贴一次；粘贴完成前显示“识别完成”，不会提前标记为“已输入”。本地模式仍保留 900ms 尾音。不会为最终识别重传整段录音，也不会断线重连、自动重试或加载本地模型回退。连接/发送/最终等待超时为 20 秒；采集端发送队列最多约 5 秒积压，超过则取消本句。最多录制 60 秒。
 

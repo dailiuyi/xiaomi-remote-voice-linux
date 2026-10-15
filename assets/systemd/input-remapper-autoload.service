@@ -1,0 +1,11 @@
+[Unit]
+Description=Autoload input-remapper presets on user login
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/input-remapper-control --command autoload --config-dir %h/.config/input-remapper
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target

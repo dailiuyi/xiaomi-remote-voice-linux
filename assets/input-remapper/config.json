@@ -1,0 +1,7 @@
+{
+    "autoload": {
+        "小米蓝牙语音遥控器": "vibe_coding",
+        "MI RC": "vibe_coding"
+    },
+    "version": "2.2.0"
+}

@@ -3,11 +3,22 @@ set -euo pipefail
 ASR_TASK_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 cd -- "$ASR_TASK_ROOT"
+if [[ -z "${DASHSCOPE_API_KEY:-}" && -f "$HOME/.config/mi-voice/api.key" ]]; then
+  KEY_FILE_PATH="$HOME/.config/mi-voice/api.key"
+  KEY_PERM="$(stat -c '%a' "$KEY_FILE_PATH" 2>/dev/null || stat -f '%Lp' "$KEY_FILE_PATH" 2>/dev/null || echo '')"
+  if [[ "$KEY_PERM" == "600" ]]; then
+    DASHSCOPE_API_KEY="$(tr -d '\r\n ' < "$KEY_FILE_PATH")"
+    export DASHSCOPE_API_KEY
+  else
+    echo "警告: $KEY_FILE_PATH 权限过于开放 ($KEY_PERM)，必须为 600 (chmod 600 $KEY_FILE_PATH)，已拒绝自动加载。" >&2
+  fi
+fi
 ASR_FLOAT=1
 ASR_STOP=0
 ASR_CHECK_ONLY=0
 ASR_BACKEND_SELECTED="${ASR_BACKEND:-qwen-api}"
 ASR_EXPECT_BACKEND=0
+ASR_HAS_RECEIVER=0
 for ASR_OPTION in "$@"; do
   if [[ "$ASR_EXPECT_BACKEND" == 1 ]]; then
     ASR_BACKEND_SELECTED="$ASR_OPTION"
@@ -19,8 +30,12 @@ for ASR_OPTION in "$@"; do
     --check-config) ASR_FLOAT=0; ASR_CHECK_ONLY=1 ;;
     --backend) ASR_EXPECT_BACKEND=1 ;;
     --backend=*) ASR_BACKEND_SELECTED="${ASR_OPTION#*=}" ;;
+    --receiver|--receiver=*) ASR_HAS_RECEIVER=1 ;;
   esac
 done
+if [[ "$ASR_HAS_RECEIVER" == 0 && ! -f "$ASR_TASK_ROOT/artifacts/2026-10-12-native-receiver/atvvoice-tested" && -f "$ASR_TASK_ROOT/artifacts/receiver-build/target/debug/atvvoice" ]]; then
+  set -- "$@" --receiver "$ASR_TASK_ROOT/artifacts/receiver-build/target/debug/atvvoice"
+fi
 if [[ "$ASR_STOP" == 1 ]]; then
   /usr/bin/python3 "$ASR_TASK_ROOT/floating_preview.py" --stop || true
   /usr/bin/python3 "$ASR_TASK_ROOT/streaming_dictation.py" --stop || true
