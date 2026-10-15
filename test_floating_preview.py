@@ -84,6 +84,15 @@ class FloatingPreviewTests(unittest.TestCase):
             self.assertTrue(preview_img.exists())
             self.assertGreater(preview_img.stat().st_size, 1000)
 
+            # Confirmed text stays expanded before paste has finished; no
+            # premature success label or leftover interim preview is shown.
+            win.display({'phase': 'final_ready', 'session': 101,
+                         'preview': '过时预览', 'final': '已确认的最终文字'})
+            self.assertTrue(win.is_expanded)
+            self.assertEqual(win.header_text, '识别完成')
+            self.assertEqual(win.display_text, '已确认的最终文字')
+            self.assertFalse(win.collapse_timer.isActive())
+
             # Trigger paste_shortcut_sent and verify quick recoil
             win.display({
                 'phase': 'paste_shortcut_sent',

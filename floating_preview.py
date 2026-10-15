@@ -355,10 +355,10 @@ def get_window_class():
                 if phase in ('paste_shortcut_sent', 'cancelled', 'failed') and not is_initial:
                     self.collapse_timer.stop()
                     self.collapse_timer.start(int(self.HOLD_SUCCESS_SECONDS * 1000))
-                elif phase in ('recording', 'tail', 'finalizing'):
+                elif phase in ('recording', 'tail', 'finalizing', 'final_ready'):
                     self.collapse_timer.stop()
 
-            active = phase in ('recording', 'tail', 'finalizing')
+            active = phase in ('recording', 'tail', 'finalizing', 'final_ready')
             # Track initial connection to avoid falsely expanding on stale past sessions
             if is_initial and phase in ('paste_shortcut_sent', 'cancelled', 'failed'):
                 recent_final = False
@@ -370,6 +370,7 @@ def get_window_class():
                 'recording': '正在听',
                 'tail': '收音结束',
                 'finalizing': '正在生成最终文字',
+                'final_ready': '识别完成',
                 'paste_shortcut_sent': '已输入',
                 'failed': '输入失败',
                 'cancelled': '本次已取消',
@@ -383,7 +384,7 @@ def get_window_class():
             else:
                 self.header_text = 'MI 语音 · ' + (labels.get(phase, '就绪') if phase in ('unavailable', 'loading') else '就绪')
 
-            text = state.get('preview', '') if active else state.get('final', '')
+            text = state.get('preview', '') if phase in ('recording', 'tail', 'finalizing') else state.get('final', '')
             if not isinstance(text, str):
                 text = ''
             if len(text) > 100:

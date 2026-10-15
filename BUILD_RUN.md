@@ -1,4 +1,4 @@
-# 本地构建与运行
+# 构建与运行
 
 命令在仓库根目录执行。Git 只保存源码，`artifacts/` 中的模型、虚拟环境和构建资源需要另行恢复。以下流程不安装系统包，不设置开机自启。
 
@@ -19,6 +19,8 @@ artifacts/receiver-build/target/debug/atvvoice --help
 
 ## 恢复 Qwen 环境
 
+默认入口已改为 Qwen 云端实时 API，使用下节的轻量环境；本节 CUDA 环境仅用于 `--backend local`。
+
 - Python 3.12 虚拟环境：`artifacts/asr-comparison/runtime/venv`。
 - 固定核心版本：torch/torchaudio 2.9.1、torchvision 0.24.1、qwen-asr 0.0.6、transformers 4.57.6、faster-whisper 1.2.1、dbus-next 0.2.3、opencc-python-reimplemented 0.1.7。
 - 本次恢复环境的完整版本清单已保存为根目录 `streaming-requirements.txt`，包括 NumPy 1.26.4、Gradio 6.17.3，避免解析器反复尝试与原环境不兼容的新组合。新建 Python 3.12 虚拟环境后，使用其 Python 执行 `-m pip install -r streaming-requirements.txt`；对应下载包的官方 PyPI 哈希复核在 `artifacts/runtime-rebuild/package-hashes.json`。该清单针对本机 Linux x86_64/CUDA 环境。
@@ -28,12 +30,74 @@ artifacts/receiver-build/target/debug/atvvoice --help
 
 模型加载阶段使用本地目录和离线模式。运行环境和模型均被 Git 忽略，不随源码提交。
 
+## Qwen 云端实时 API（默认，不加载 GPU 模型）
+
+云端环境只需 Python 3.9+、`websockets` 和 `dbus-next`，不安装 Torch/CUDA、NumPy 或本地模型；浮窗仍使用系统 PyQt6，接收器和 ydotool 工具仍按前文准备。
+
+```bash
+python3 -m venv artifacts/cloud-asr/venv
+artifacts/cloud-asr/venv/bin/python -m pip install -r cloud-requirements.txt
+
+# 在自己的终端输入；不会回显，也不会把密钥写进命令历史。
+read -rsp '百炼 API Key: ' DASHSCOPE_API_KEY
+echo
+export DASHSCOPE_API_KEY
+
+# 只查配置和依赖，不联网、不启动设备。
+bash start_streaming_dictation.sh --check-config
+
+# 使用已构建的接收器，按住后才建立云端会话并上传录音。
+bash start_streaming_dictation.sh --backend qwen-api \
+  --receiver "$PWD/artifacts/receiver-build/target/debug/atvvoice"
+```
+
+默认模型 `qwen3-asr-flash-realtime`、地域北京。新加坡账号添加 `--qwen-region singapore`，必须使用对应地域的 Key；固定版本可用 `--qwen-model qwen3-asr-flash-realtime-YYYY-MM-DD`。可选环境变量 `DASHSCOPE_WORKSPACE_ID` 使用业务空间专属域名；未设置时使用仍受支持的 DashScope 公共域名。Key 仅存在于进程环境，不接受命令行密钥参数，不在启动元数据或回执中记录。
+
+每次按住创建独立 WebSocket，会话配置确认后按 100ms 分包发送 16kHz 单声道 s16le PCM。音频只增量发送一次；服务端 VAD 的多句结果按音频顺序合并。松开后保留 300ms 尾音，发送 `session.finish` 并等待所有最终结果与 `session.finished`。确认完整结果后立即更新面板，然后只粘贴一次；粘贴完成前显示“识别完成”，不会提前标记为“已输入”。本地模式仍保留 900ms 尾音。不会为最终识别重传整段录音，也不会断线重连、自动重试或加载本地模型回退。连接/发送/最终等待超时为 20 秒；采集端发送队列最多约 5 秒积压，超过则取消本句。最多录制 60 秒。
+
+运行元数据中的 `tail_ms` 可确认当前进程的尾音配置。会话回执的 `release_to_final_result_seconds` 是松键到最终结果可用的时间，`release_to_paste_flow_seconds` 还包括粘贴和剪贴板恢复；两者都不是屏幕像素出现时间。300ms 尾音需人工验证字尾，不能据此承诺不截音。
+
+该模式会上传本次按住和尾音的音频并按服务商规则计费；未按住时不上传 PipeWire 音频。原有本地 WAV/TXT/JSON 回执仍保存于被忽略的 `artifacts/streaming-runtime/sessions/`，包含上传字节数、包数、地域和耗时，不含密钥。失败时不会粘贴预览文字。
+
+`CLOUD_CONFIGURED` 和 `READY` 只表示配置与本地收音链路准备完成，云端鉴权在首次按住时执行。人工验收：点击临时输入框，按住说一段中英混合文字并中间停顿，检查预览、松开后整句只粘贴一次且不发 Enter；在会话 JSON 中核对 `uploaded_bytes` 等于 WAV 的 PCM 字节数。网络中断应显示失败，不能粘贴部分结果。测试用 `--replay` 同样会上传指定 WAV（仅手动使用经授权的音频），只写回放输出，不触碰键盘。
+
+恢复本地模式需先停止并确认现有实例退出，然后显式传入 `--backend local`。启动脚本也支持 `ASR_BACKEND=local`，不会在云端失败时自动切换。
+
+### 可选：轻度降噪与受限自动增益
+
+当前云端模式支持 `--audio-processing light`，默认 `off`，人工对比验收前不自动启用。本地 Qwen 和 Whisper 链路暂不接入这项处理。安装额外依赖只需 NumPy，不加载 GPU 模型：
+
+```bash
+artifacts/cloud-asr/venv/bin/python -m pip install -r audio-enhancement-requirements.txt
+bash start_streaming_dictation.sh --backend qwen-api --audio-processing light --check-config
+```
+
+切换时先停止并确认原实例的 receiver、recorder、keyboard 退出，再沿用原地域、密钥环境与 receiver 路径启动，并增加 `--audio-processing light`。已有实例不会热更新；回退使用 `--audio-processing off`。`--check-config` 不连接云端、不启动设备；仍需原有密钥环境。
+
+该模式在云端发送前做流式频谱降噪，再做受限自动增益和峰值限制。每次按住重置处理器，前约 200ms 的有效音频只收集统计；全零填充不作为环境噪声。降噪频谱掩码下限约 -6dB，噪声估计上限 -55dBFS，并保护突出的窄带音调，避免把持续轻声完全当作底噪。自动增益最大 +12dB、目标电平 -30dBFS，只在电平高于近期背景估计时逐渐增加；峰值限制在约 -2dBFS。参数是保守初值，尚未证明对实际办公室语音最优。
+
+算法增加 10ms 前瞻，发送分包仍不超过 100ms。结束时补齐滤波尾部并裁去内部填充，保持采样数和时长；静音、取消、超时和上传一次的规则不变。该算法不是说话人分离或可靠 VAD，连续很轻的人声可能得不到明显增益，交叠人声和强噪声仍可能干扰识别。不能用电平提高或噪声下降代替识别正确率验收。
+
+`NNN.wav` 继续保存原始收音；增强模式成功完成识别后另外保存 `NNN.processed.wav`，内容对应本次实际上传的 PCM。JSON 的 `audio_processing` 记录版本、增益、限幅和采样数，`processed_audio_file` 指向处理后文件；`uploaded_bytes` 应同时等于原始和处理后 WAV 的 PCM 字节数。失败不重传，也不自动改用原始录音再识别。
+
+离线生成试听文件不上传、不运行 ASR、不触碰输入框，输出文件必须不存在：
+
+```bash
+artifacts/cloud-asr/venv/bin/python audio_enhancement.py input.wav output-light.wav
+artifacts/cloud-asr/venv/bin/python audio_enhancement.py input.wav output-gain.wav --mode gain
+```
+
+人工验收用固定句子分别正常说、小声说、有办公室背景声时说，记录错字、漏字、字尾和响应延迟，对比原始与增强模式。不要只凭“听起来更干净”判断识别提升；对保存录音做云端重复识别需要额外上传和计费授权。
+
+协议依据：[WebSocket 接入指南](https://help.aliyun.com/zh/model-studio/qwen-asr-realtime-interaction-process)、[客户端事件](https://help.aliyun.com/zh/model-studio/qwen-asr-realtime-client-events)、[服务端事件](https://help.aliyun.com/zh/model-studio/qwen-asr-realtime-server-events)。
+
 ## 使用新构建运行
 
 先查现有 unit、进程、D-Bus 名称和 ATVVoice 音源，健康实例不重复启动。同一遥控器不能由新旧接收器同时控制。
 
 ```bash
 bash start_streaming_dictation.sh \
+  --backend local \
   --receiver "$PWD/artifacts/receiver-build/target/debug/atvvoice"
 ```
 

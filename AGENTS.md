@@ -6,7 +6,7 @@
 
 - 主机 `elma-ubuntu-pc`，用户 `elma`，仓库 `/home/elma/文档/ChatGPT/Mi遥控`。先核对分支和已有改动。
 - 链路：RC003-MS → BlueZ/ATVV → PipeWire 专属音源 → Python 收音 → 本地 ASR → KDE Klipper/ydotool Ctrl+V。
-- 主入口 `start_streaming_dictation.sh` 使用 Qwen 1.7B；`start_dictation.sh` 保留 Whisper medium。两套不能同时控制接收器。
+- 主入口 `start_streaming_dictation.sh` 默认使用 Qwen 云端实时 API；`--backend local` 使用本地 Qwen 1.7B，`start_dictation.sh` 保留 Whisper medium。几套不能同时控制接收器。
 - 环境、模型和证据位于被忽略的 `artifacts/`。源码存在不代表运行资产已恢复，先核对 `BUILD_RUN.md` 和实际目录。
 
 ## 操作边界
@@ -17,7 +17,7 @@
 - 启动前检查 unit、进程、D-Bus 名称和 PipeWire 音源，已有健康实例不重复启动。切换构建只处理本实例拥有的进程。
 - 不改系统代理、默认音频设备、sudoers 或设备权限。构建库优先局部解压到 `artifacts/receiver-build/sysroot`。
 - `toggle_dictation.sh` 仍有进程误匹配和强杀子进程清理缺口。不得依赖它对陌生进程批量终止，先核对实际入口、进程身份和父子关系。
-- 语音本地推理，不上传。真实按键、音质和焦点输入由用户验收；测试不得向真实输入框自动发送文字。
+- 本地模式不上传语音；用户已授权接入的 `qwen-api` 模式只向阿里云发送本次按住及尾音的 PCM，每段音频只发送一次，失败不自动重传或回退。API Key 仅从环境变量读取，不写源码、日志或回执。真实按键、音质和焦点输入由用户验收；测试不得向真实输入框自动发送文字。
 
 ## 构建与验证
 
@@ -30,7 +30,7 @@
 ## 运行与证据
 
 - 默认启动引用历史 `atvvoice-tested`。验证新构建必须用 `--receiver` 显式指定路径，记录源码 commit、二进制 SHA-256、命令行和日志。
-- READY 应对应模型加载、唯一遥控器音源和实际 PCM。`--status`、元数据存在、进程启动都不足以证明就绪。
+- 本地 READY 应对应模型加载、唯一遥控器音源和实际 PCM；云端只在按住时连接，READY 只证明本地收音链路，不代表云端鉴权或转写通过。`--status`、元数据存在、进程启动都不足以证明就绪。
 - 核对预览 status 接口、专属音源和子进程，不把随机访问路径或口述内容输出到不必要的报告。
 - 分开报告已保存、已提交、已编译、已启动、健康检查和设备/人工验收。历史 115 项 Rust 测试或旧二进制试听不能移用于新构建。
 - 运行回执和日志保存在 `artifacts/`。停止后确认 receiver、recorder、keyboard 均退出，再报告停止成功。

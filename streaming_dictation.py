@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline Qwen push-to-talk previews, followed by one final focus paste."""
+"""Qwen cloud/local push-to-talk previews, followed by one final focus paste."""
 import argparse
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -94,6 +94,9 @@ class StreamingEngine:
     async def infer(self, pcm):
         return await asyncio.get_running_loop().run_in_executor(self.executor, self.transcriber.transcribe, pcm)
 
+    def processed_audio(self):
+        return None
+
     async def previews(self):
         while not self.stop.is_set():
             await asyncio.sleep(.04)
@@ -136,6 +139,18 @@ class StreamingEngine:
             try:
                 started = time.monotonic()
                 text, metrics = await self.infer(pcm)
+                if released_at is not None:
+                    metrics['release_to_final_result_seconds'] = time.monotonic()-released_at
+                if text and not self.stop.is_set() and generation == self.state.generation:
+                    # Publish only the confirmed result, before clipboard/keyboard
+                    # work. Capture stays busy until paste and cleanup finish.
+                    self.state.finish(generation, text, 'final_ready', metrics)
+                    self.update()
+                processed = self.processed_audio()
+                if processed is not None:
+                    processed_path = directory/f'{number:03d}.processed.wav'
+                    write_pcm(processed_path, processed)
+                    record['processed_audio_file'] = str(processed_path)
                 metrics['final_queue_and_inference_seconds'] = time.monotonic()-started
                 record.update(metrics, text=text)
                 if self.stop.is_set() or generation != self.state.generation:
@@ -163,6 +178,108 @@ class StreamingEngine:
                 (directory/f'{number:03d}.json').write_text(json.dumps(record, ensure_ascii=False, indent=2)+'\n')
                 self.controller.complete()
                 self.jobs.task_done()
+
+
+class CloudStreamingEngine(StreamingEngine):
+    """Share capture/paste rules, but never run snapshot or final re-recognition."""
+    def __init__(self, config, publish, session_factory=None, *, audio_processing='off'):
+        super().__init__(None, None, publish)
+        self.controller.tail_seconds = .3
+        from streaming_qwen import QwenRealtimeSession
+        self.config = config
+        self.session_factory = session_factory or (lambda: QwenRealtimeSession(config, audio_processing=audio_processing))
+        self.cloud_session = None
+        self.cloud_task = self.audio_queue = None
+        self.cloud_tasks = set()
+        self.state.value.update(model=config.model, backend='qwen-api',
+                                message='正在准备云端识别（不加载本地模型）')
+
+    def _abort(self, message):
+        held = self.controller.phase == CapturePhase.RECORDING
+        self.controller.complete()
+        self.controller.ignored_hold = self.controller.ignored_hold or held
+        self.state.cancel(message)
+        self.state.value['phase'] = 'failed'
+        self.update()
+
+    def state_changed(self, value):
+        generation = self.state.generation
+        super().state_changed(value)
+        if self.state.generation == generation:
+            return
+        if self.cloud_task and not self.cloud_task.done():
+            self.cloud_task.cancel()
+        if self.controller.phase != CapturePhase.RECORDING:
+            return
+        generation = self.state.generation
+        # About five seconds at the receiver's 512-byte read size. A slow
+        # connection cancels instead of silently dropping audio or growing RAM.
+        self.audio_queue = asyncio.Queue(maxsize=320)
+        session = self.session_factory()
+        self.cloud_session = session
+
+        def preview(text, seconds):
+            if self.state.preview(generation, text, {}, seconds):
+                self.update()
+
+        self.cloud_task = asyncio.create_task(session.recognize(self.audio_queue, preview),
+                                              name=f'qwen-cloud-{generation}')
+        self.cloud_tasks.add(self.cloud_task)
+
+        def done(task):
+            self.cloud_tasks.discard(task)
+            if task.cancelled():
+                return
+            error = task.exception()
+            if (error and generation == self.state.generation
+                    and self.controller.phase in (CapturePhase.RECORDING, CapturePhase.TAIL)):
+                self._abort('云端识别失败，本句已取消；检查网络、地域、密钥和额度后重试')
+                LOG.error('Cloud recognition failed during capture; no retry or paste')
+
+        self.cloud_task.add_done_callback(done)
+
+    def feed(self, pcm):
+        active = self.controller.phase in (CapturePhase.RECORDING, CapturePhase.TAIL)
+        generation = self.state.generation
+        super().feed(pcm)
+        if self.state.generation != generation:
+            if self.cloud_task:
+                self.cloud_task.cancel()
+        elif active:
+            try:
+                self.audio_queue.put_nowait(pcm)
+            except asyncio.QueueFull:
+                self._abort('云端发送积压，本句已取消；请检查网络后重新按住说话')
+                self.cloud_task.cancel()
+
+    async def previews(self):
+        # Previews come from server events, never from uploading PCM snapshots.
+        await self.stop.wait()
+
+    def processed_audio(self):
+        return self.cloud_session.processed_audio if self.cloud_session else None
+
+    async def infer(self, pcm):
+        started = time.monotonic()
+        # `pcm` stays on disk for the existing local receipt, never sent again.
+        if not self.cloud_task.done():
+            try:
+                self.audio_queue.put_nowait(None)
+            except asyncio.QueueFull:
+                self.cloud_task.cancel()
+                raise RuntimeError('Cloud send backlog; cancelled without retry') from None
+        text, metrics = await self.cloud_task
+        if metrics['uploaded_bytes'] != len(pcm):
+            raise RuntimeError('Cloud upload length mismatch; refusing partial paste')
+        metrics['realtime_session_seconds'] = metrics['transcription_seconds']
+        metrics['transcription_seconds'] = time.monotonic()-started
+        return text, metrics
+
+    async def close(self):
+        tasks = list(self.cloud_tasks)
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 class ReceiverSession:
@@ -267,13 +384,21 @@ class ReceiverSession:
 
 
 async def run(args, server, executor):
-    from streaming_asr import QwenTranscriber
-    start = time.monotonic()
-    transcriber = await asyncio.get_running_loop().run_in_executor(executor, QwenTranscriber, args.model)
-    LOG.info('MODEL_READY load_seconds=%.3f', time.monotonic()-start)
-    engine = StreamingEngine(transcriber, executor, server.publish, args.preview_interval)
-    await engine.infer(b'\x00\x00'*16000)  # Initialize CPU VAD without hallucinating silence.
-    engine.state.value.update(phase='ready', message='已就绪：点击输入框，按住语音键说话')
+    if args.backend == 'qwen-api':
+        engine = CloudStreamingEngine(args.qwen_config, server.publish,
+                                      audio_processing=args.audio_processing)
+        engine.state.value.update(phase='ready',
+            message='本地收音已就绪：按住后连接 Qwen 云端识别（会上传录音）')
+        LOG.info('CLOUD_CONFIGURED model=%s region=%s; authentication happens on press',
+                 args.qwen_config.model, args.qwen_config.region)
+    else:
+        from streaming_asr import QwenTranscriber
+        start = time.monotonic()
+        transcriber = await asyncio.get_running_loop().run_in_executor(executor, QwenTranscriber, args.model)
+        LOG.info('MODEL_READY load_seconds=%.3f', time.monotonic()-start)
+        engine = StreamingEngine(transcriber, executor, server.publish, args.preview_interval)
+        await engine.infer(b'\x00\x00'*16000)  # Initialize CPU VAD without hallucinating silence.
+        engine.state.value.update(phase='ready', backend='local', message='已就绪：点击输入框，按住语音键说话')
     directory = RUNTIME/'sessions'/time.strftime('%Y%m%d-%H%M%S')
     directory.mkdir(parents=True, exist_ok=False)
     receiver = ReceiverSession(directory)
@@ -305,7 +430,10 @@ async def run(args, server, executor):
         LOG.info('READY preview=%s session_dir=%s', server.url, directory)
         metadata_name = 'replay-current.json' if args.replay else 'current.json'
         (RUNTIME/metadata_name).write_text(json.dumps({'preview_url': server.url, 'session_dir': str(directory),
-                                      'pid': os.getpid(), 'replay': bool(args.replay)}, indent=2)+'\n')
+                                      'pid': os.getpid(), 'replay': bool(args.replay),
+                                      'audio_processing': args.audio_processing,
+                                      'tail_ms': round(engine.controller.tail_seconds * 1000),
+                                      'backend': args.backend, 'model': engine.state.value['model']}, indent=2)+'\n')
         if args.replay:
             with wave.open(str(args.replay), 'rb') as w:
                 assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (16000, 1, 2)
@@ -326,6 +454,8 @@ async def run(args, server, executor):
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        if isinstance(engine, CloudStreamingEngine):
+            await engine.close()
         if not args.replay:
             await receiver.close()
         engine.state.value.update(phase='stopped', message='语音输入已停止')
@@ -335,6 +465,12 @@ async def run(args, server, executor):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--backend', choices=('qwen-api', 'local'), default=os.environ.get('ASR_BACKEND', 'qwen-api'))
+    p.add_argument('--qwen-region', choices=('beijing', 'singapore'), default='beijing')
+    p.add_argument('--qwen-model', default='qwen3-asr-flash-realtime')
+    p.add_argument('--audio-processing', choices=('off', 'light'), default='off',
+                   help='Optional cloud PCM enhancement: light denoise + bounded AGC; default off')
+    p.add_argument('--check-config', action='store_true', help='Validate configuration/dependencies without connecting or starting devices')
     p.add_argument('--model', type=Path, default=ROOT/'artifacts/asr-comparison/models/1.7B')
     p.add_argument('--receiver', type=Path, default=ROOT/'artifacts/2026-10-12-native-receiver/atvvoice-tested')
     p.add_argument('--port', type=int, default=18767)
@@ -345,8 +481,27 @@ def main():
     if args.stop:
         stop_current()
         return
+    if args.backend not in ('qwen-api', 'local'):
+        p.error('backend must be qwen-api or local')
     if args.preview_interval < .5:
         p.error('preview interval must be at least 0.5 seconds')
+    if args.audio_processing != 'off':
+        if args.backend != 'qwen-api':
+            p.error('audio processing currently supports qwen-api only')
+        try:
+            from audio_enhancement import SpeechEnhancer
+        except ImportError:
+            p.error('请先安装 audio-enhancement-requirements.txt 中的依赖')
+    if args.backend == 'qwen-api':
+        from streaming_qwen import QwenConfig
+        try:
+            args.qwen_config = QwenConfig.from_env(args.qwen_region, args.qwen_model)
+            from websockets.asyncio.client import connect  # Cloud dependency only.
+        except (ValueError, ImportError) as error:
+            p.error(str(error) if isinstance(error, ValueError) else '请先安装 cloud-requirements.txt 中的依赖')
+    if args.check_config:
+        print(f'Configuration valid: backend={args.backend}; audio_processing={args.audio_processing}; no cloud connection or device started')
+        return
     os.environ.update(HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1', TOKENIZERS_PARALLELISM='false')
     RUNTIME.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')

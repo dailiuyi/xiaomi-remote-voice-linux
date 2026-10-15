@@ -1,182 +1,152 @@
 # Xiaomi RC003-MS Voice Input (Linux)
 
-> 用手里闲置的小米电视蓝牙遥控器（型号 RC003-MS），在 Linux 桌面上做一套全局随手语音听写工具。
+用小米 RC003-MS 蓝牙遥控器，在 Linux 桌面上按住说话、松开输入。
 
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Ubuntu-orange.svg?style=flat-square)](https://ubuntu.com/)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Ubuntu-orange.svg?style=flat-square)](BUILD_RUN.md)
 [![Receiver](https://img.shields.io/badge/Receiver-Rust%20%7C%20PipeWire-red.svg?style=flat-square)](receiver/atvvoice/)
-[![ASR Engine](https://img.shields.io/badge/ASR-Qwen3--ASR%201.7B-blue.svg?style=flat-square)](https://github.com/QwenLM)
+[![ASR](https://img.shields.io/badge/ASR-Qwen%20Cloud%20%7C%20Local-blue.svg?style=flat-square)](BUILD_RUN.md)
 [![UI](https://img.shields.io/badge/UI-PyQt6%20Capsule-green.svg?style=flat-square)](FLOATING_PREVIEW.md)
-[![License](https://img.shields.io/badge/License-MIT%20%2F%20Apache--2.0-lightgrey.svg?style=flat-square)](LICENSE)
 
-<p align="center">
-  <img src="assets/hero.svg" alt="Xiaomi Voice Input for Linux" width="100%">
-</p>
+按住语音键时，悬浮胶囊显示收音状态和转写预览。松开后，系统确认最终文字并立即更新面板，再通过 KDE Klipper 和 ydotool 模拟一次 `Ctrl+V`，输入当前聚焦的窗口；不会自动发送回车。粘贴流程完成前显示“识别完成”，完成后才显示“已输入”。
 
-按住遥控器语音键说话，屏幕上方会弹出一个仿灵动岛的黑色半透明悬浮胶囊，实时显示收音波形和当前状态；松开按键，本地大模型立刻开始识别，识别完成后自动通过剪贴板模拟 `Ctrl+V`，把文字打进你当前聚焦的窗口里。
+**默认使用 Qwen 云端实时 API。** 本次按住期间及松键后的 300 ms 尾音会上传至阿里云，并按服务商规则计费；未按住时不上传遥控器音频。需要离线使用时，显式选择 `--backend local`，在本机运行 Qwen3-ASR 1.7B。
 
-**全链路本地离线推理，不依赖网络，不上传任何语音，隐私完全留在自己的电脑上。**
+## 识别模式
 
----
+| 模式 | 启动方式 | 音频去向 | 运行要求 |
+| --- | --- | --- | --- |
+| Qwen 云端实时识别（默认） | `--backend qwen-api` | 按住和尾音期间增量上传，每段只发送一次 | 网络、对应地域的 API Key，不需要本地 GPU 模型 |
+| 本地 Qwen3-ASR 1.7B | `--backend local` | 本地推理，不上传 | 恢复本地模型和 Python 环境，建议 NVIDIA CUDA 显卡 |
+| 本地 Whisper medium | `start_dictation.sh` | 本地推理，不上传 | 单独恢复 Whisper 环境和模型 |
 
-## 为什么做这个项目？
+云端连接或识别失败会取消本句，不自动重传、不粘贴草稿，也不自动切换到本地模型。几套入口不能同时控制同一个遥控器。
 
-### 1. 随手口述，比键盘和桌面麦克风更自由
-在写长篇技术方案、构思代码重构，或是向大模型倾倒长 Prompt 时，敲键盘时间长了手指和手腕容易酸痛。桌上的鹅颈麦要求必须端坐对着麦克风，戴耳机麦克风又觉得闷、有束缚感。
-小米遥控器轻便小巧，拿在手里靠在工位椅背上、甚至站起来踱步时都能盲操。按住说话就像对讲机一样，思绪到哪里，文字就录到哪里。
+## 收音与输入链路
 
-### 2. 攻克 Android TV 蓝牙协议，把廉价遥控器盘活成专业话筒
-小米等电视遥控器遵循 Google ATVV（Android TV Voice）协议，音频通过 BLE GATT 特征值传输 ADPCM 压缩数据。在 Linux 蓝牙栈下，系统默认只能识别它的方向键与音量键，根本录不到声音；而且原厂固件刚收音时带有严重的直流偏置与杂音爆音。
-我们用 **Rust** 原生实现了 ATVV 协议握手、状态机维护与 ADPCM 解码，在 **PipeWire** 中建立专属的独立虚拟音频节点；再通过 **Python 实时 DSP**（80 Hz 一阶高通消除直流偏置 + 中值滤波平滑跳变 + STFT 噪声谱抑制），把几十块钱的闲置遥控器调教成了高信噪比的人声输入设备。
-
-### 3. 彻底告别云端依赖，保护代码与日常隐私
-主流商业语音输入法几乎都强制将音频上传到公有云。在日常编写核心业务代码、处理内部文档或私人沟通时，上传音频存在不可控的合规与隐私风险。
-本项目全链路部署在本地，采用阿里巴巴开源的 **Qwen3-ASR 1.7B** 语音大模型（基于 PyTorch / Transformers 本地推理），对中英文混杂、专业术语断句都有极高准度，离线也能秒级转写。
-
-### 4. 不抢焦点，不误发消息
-很多第三方听写工具在弹出识别小窗时会夺取当前窗口的焦点，导致识别出的文字打不到原来的光标位置；还有些工具喜欢在打完字后自动按一次回车，极易在聊天软件中把还没修改完的草稿直接发送出去。
-我们设计的灵动岛悬浮胶囊具备焦点穿透与防抢占机制（Focus Stealing Prevention），全程不抢鼠标和键盘焦点；转写完成后只更新系统剪贴板，并通过 `ydotool` 发送一次精准的 `Ctrl+V`，**绝不自动敲回车**，在 VSCode、终端、浏览器或各类聊天软件中都能稳定使用。
-
----
-
-## 系统架构与工作链路
-
-<p align="center">
-  <img src="assets/architecture.svg" alt="System Pipeline &amp; Architecture" width="100%">
-</p>
-
-<details>
-<summary>点击展开原始数据流拓扑 (Mermaid)</summary>
+接收器通过 BlueZ 和 ATVV 协议读取遥控器音频，将 ADPCM 解码成 16 kHz 单声道 PCM，并在 PipeWire 中建立专属音源。收音程序绑定这一音源，不回退到系统默认麦克风。
 
 ```mermaid
 flowchart TD
-    subgraph 蓝牙与硬件层
-        RC["小米蓝牙遥控器 (RC003-MS)"] -->|BLE GATT / ATVV 协议帧| BlueZ["Linux BlueZ (D-Bus)"]
-    end
-
-    subgraph 接收与音频层
-        BlueZ -->|控制报文 + ADPCM 流| Receiver["Rust 接收器 (atvvoice)"]
-        Receiver -->|16kHz 单声道 PCM| PWNode["PipeWire 独立节点<br>(atvvoice-rc003dictation)"]
-    end
-
-    subgraph 核心处理与推理层
-        PWNode -->|录音流| PyCapture["Python 录音采集"]
-        PyCapture -->|实时滤波| DSP["实时 DSP 模块<br>(高通去偏置 / 中值消脉冲 / STFT 降噪)"]
-        DSP -->|长按完整录音| ASR["Qwen3-ASR 1.7B<br>(本地 PyTorch / CUDA 推理)"]
-    end
-
-    subgraph 桌面与交互层
-        Receiver -.->|状态与事件同步| PreviewUI["PyQt6 灵动岛悬浮预览<br>(状态胶囊 / 动态波形)"]
-        ASR -->|转写文字| Injector["文本注入服务<br>(wl-copy / Klipper + ydotool)"]
-        Injector -->|模拟 Ctrl+V| ActiveApp["当前输入窗口<br>(编辑器 / 浏览器 / 终端 / 聊天软件)"]
-    end
+    Remote[小米 RC003-MS] -->|BLE / ATVV| Receiver[Rust 接收器]
+    Receiver -->|16 kHz PCM| PipeWire[PipeWire 专属音源]
+    PipeWire --> Capture[Python 按键控制收音]
+    Capture --> Cloud[Qwen 云端实时 API]
+    Capture --> DSP[可选：轻度降噪与受限自动增益]
+    DSP --> Cloud
+    Capture --> Local[本地 Qwen3-ASR 1.7B]
+    Cloud --> Result[转写预览与最终结果]
+    Local --> Result
+    Result --> Panel[PyQt6 悬浮预览 / 本地网页面板]
+    Result --> Paste[最终结果确认后单次 Ctrl+V]
+    Paste --> App[当前聚焦的输入窗口]
 ```
 
-</details>
+云端在松键后保留 **300 ms** 尾音；本地 Qwen 模式仍保留 **900 ms**。缩短尾音减少了固定等待，但字尾完整性仍需在实际遥控器上验证。最终响应时间还受网络、服务端处理和桌面输入流程影响。
 
----
+悬浮窗按不抢焦点设计，转写目标取决于最终粘贴时哪个窗口获得焦点。不同桌面和应用的表现需要单独验收，尤其是终端和聊天输入框。
 
-## 本地 ASR 模型实测与选型
+## 可选音频增强
 
-项目主推 **Qwen3-ASR 1.7B**，同时在架构中保留 **Whisper medium** 作为轻量备用方案。以下为在 RTX 4060 Laptop (8GB) 实机环境下，基于小米 RC003-MS 遥控器真实音频录音的同源离线对比：
+云端模式支持 `--audio-processing light`，默认关闭。该选项在上传前依次进行轻度频谱降噪、受限自动增益和峰值限制，用于尝试改善轻声及稳定背景噪声下的输入：
 
-<p align="center">
-  <img src="assets/benchmark.svg" alt="Qwen vs Whisper Benchmark Comparison" width="100%">
-</p>
+- 降噪掩码最多衰减约 6 dB，保护突出的窄带音调，不用硬门限直接切断轻声。
+- 自动增益最高 +12 dB，只有电平高于近期背景估计时才逐渐增加；峰值限制约为 −2 dBFS。
+- 每次按住重置处理状态，增加 10 ms 算法前瞻；结束时补齐滤波尾部，保持采样数和时长。
+- 原始录音继续保存；增强模式成功识别后，另存对应实际上传内容的 `NNN.processed.wav`，便于对比。
 
-- **为什么主选 Qwen3-ASR 1.7B**：在中文开发术语（如函数名、缩写、技术名词）和自然语序断句上表现优异，极少出现同音字小幻觉；且支持高频的增量快照重识别，是驱动桌面灵动岛悬浮波形与动态文字预览的核心。
-- **Whisper medium 的定位**：显存占用较小（约 1.5 ~ 2.1 GB），适合显存较为紧张的机器作为降级备用，但仅支持松开按键后单次离线转写。
-
----
-
-## 技术栈一览
-
-| 模块 | 核心技术 / 组件 | 承担职责 |
-| :--- | :--- | :--- |
-| **底层与音频** | Linux BlueZ, D-Bus, PipeWire 0.3+ | 负责 BLE 蓝牙通信、服务发现及音频路由管理 |
-| **协议接收器** | Rust (2021), tokio, pipewire-rs, dbus | 逆向实现 ATVV 协议、状态机同步与 ADPCM 音频流解码 |
-| **信号处理** | Python 3.12, NumPy, SciPy | 实时音频捕获、直流偏置滤除、STFT 噪声谱估计与软限幅 |
-| **语音识别** | Qwen3-ASR 1.7B, PyTorch, Transformers | 本地离线神经网络推理，输出带标点的精准文本（保留 Whisper medium 备用） |
-| **桌面交互** | PyQt6, Qt Offscreen / Wayland | 极简半透明黑色胶囊悬浮窗，防抢焦设计，提供状态动效与音波能量柱 |
-| **文本模拟** | ydotool, wl-clipboard, KDE Klipper | 跨 Wayland / X11 写入系统剪贴板并模拟组合键自动粘贴 |
-
----
-
-## 硬件与运行环境要求
-
-- **操作系统**：Ubuntu 26.04 LTS 或其他 Linux 发行版（内核 6.x+，Wayland 或 X11 环境）。
-- **音频系统**：PipeWire（包含 `pipewire-pulse` 兼容模块）。
-- **GPU 建议**：具备 NVIDIA 显卡（支持 CUDA，推荐 8GB 显存以上，如 RTX 4060），可确保 1.7B 模型毫秒级响应。
-- **硬件设备**：小米电视/盒子原装蓝牙语音遥控器（背面型号为 **RC003-MS**）。
-
----
+这不是说话人分离算法，不能保证消除同事说话等交叠人声。连续轻声可能得不到明显增益；电平提高、听起来更干净，都不能代替错字和漏字的实际比较。参数说明和离线试听命令见 [BUILD_RUN.md](BUILD_RUN.md#可选轻度降噪与受限自动增益)。
 
 ## 快速上手
 
-### 1. 配对蓝牙遥控器
-1. 打开系统蓝牙设置界面。
-2. 同时按住遥控器上的「主页键 + 菜单键」直到指示灯闪烁，进入配对状态。
-3. 在系统蓝牙列表中点击配对并连接。
-4. 首次使用前按一下遥控器任意方向键，唤醒蓝牙连接通道。
+### 1. 准备设备和桌面环境
 
-### 2. 准备运行环境
-详细的编译与本地环境恢复步骤，请查阅 [本地构建与运行指南 (BUILD_RUN.md)](BUILD_RUN.md)。
-- 安装 Python 依赖：`pip install -r streaming-requirements.txt`
-- 将 Qwen3-ASR 1.7B 模型文件放置于本地运行目录。
+当前工作环境为 Ubuntu / KDE，依赖 BlueZ、PipeWire、KDE Klipper 和 ydotool；其他桌面需要自行适配剪贴板与输入路径。本地 Qwen 1.7B 建议使用至少 8 GB 显存的 NVIDIA 显卡，实际可用空间还取决于桌面及其他程序；云端模式不要求 CUDA。
 
-### 3. 一键启动
-在仓库根目录直接运行主脚本：
+先在系统蓝牙设置中配对 RC003-MS，再按任意方向键唤醒设备。接收器的设备地址及运行资产路径目前带有本机配置，首次在其他机器使用时需按 [构建与运行指南](BUILD_RUN.md) 核对。源码仓库不包含模型、虚拟环境、接收器构建产物或密钥。
+
+### 2. 准备云端 Python 环境
+
+在仓库根目录执行：
 
 ```bash
-bash start_streaming_dictation.sh
+python3 -m venv artifacts/cloud-asr/venv
+artifacts/cloud-asr/venv/bin/python -m pip install -r cloud-requirements.txt
+
+# 在自己的终端输入，密钥不会回显或写入命令历史。
+read -rsp '百炼 API Key: ' DASHSCOPE_API_KEY
+echo
+export DASHSCOPE_API_KEY
 ```
 
-如需显式指定新构建的 Rust 接收器二进制：
+默认模型为 `qwen3-asr-flash-realtime`，地域为北京。新加坡账号需加 `--qwen-region singapore` 并使用对应地域的密钥。API Key 只从环境变量读取，不写入源码、日志或回执。
+
+接收器构建、ydotool 工具及系统 PyQt6 的准备方法见 [BUILD_RUN.md](BUILD_RUN.md)。
+
+### 3. 启动听写
+
+使用已构建的接收器：
 
 ```bash
-bash start_streaming_dictation.sh --receiver "$PWD/artifacts/receiver-build/target/debug/atvvoice"
+bash start_streaming_dictation.sh --backend qwen-api \
+  --receiver "$PWD/artifacts/receiver-build/target/debug/atvvoice"
 ```
 
-### 4. 听写使用体验
-1. 终端或悬浮窗显示 **`READY`** 即表示系统已就绪。
-2. 鼠标点击你想输入的文本框（例如代码编辑器、网页或聊天输入框）。
-3. **按住遥控器语音键说话**，桌面中央会展开绿色的录音波形胶囊。
-4. **说完了松开按键**，系统会自动保留约 900 ms 尾音避免吞字，随后进行快速识别并自动执行 `Ctrl+V` 将文字贴入窗口中。
+要启用轻度降噪和自动增益，先安装可选依赖，再带参数启动：
 
----
-
-## 仓库结构
-
-```text
-├── assets/                        # GitHub README 视觉资产 (纯 SVG 原生卡片与图表)
-├── start_streaming_dictation.sh   # 主入口：启动 Qwen 语音识别与灵动岛悬浮服务
-├── start_dictation.sh             # 备用入口：启动 Whisper 语音听写服务
-├── toggle_dictation.sh            # 桌面快捷启停脚本
-├── receiver/                      # Rust 编写的 ATVV 协议接收器源码 (atvvoice crate)
-│   └── atvvoice/src/              # 包含 BLE、D-Bus、PipeWire 音频通道及 ADPCM 解码实现
-├── streaming_dictation.py         # 听写主控服务：管线生命周期调度与状态机
-├── streaming_asr.py               # Qwen3-ASR 模型加载与推理封装
-├── audio_filter.py                # 实时音频 DSP 滤波管线 (高通/中值/STFT)
-├── floating_preview.py            # PyQt6 灵动岛悬浮预览桌面端
-├── streaming_preview.py           # 本地 HTTP 预览状态与通信接口
-├── build_receiver.sh              # 接收器局部构建与编译辅助脚本
-└── docs & specs/                  # 专题技术与排错文档（见下节）
+```bash
+artifacts/cloud-asr/venv/bin/python -m pip install -r audio-enhancement-requirements.txt
+bash start_streaming_dictation.sh --backend qwen-api --audio-processing light \
+  --receiver "$PWD/artifacts/receiver-build/target/debug/atvvoice"
 ```
 
----
+启动参数不会热更新。已有实例运行时，先正常停止并确认其接收器、录音和键盘子进程退出，再切换配置；不要重复启动。回退使用 `--audio-processing off`。
 
-## 专题文档与深入参考
+恢复本地模型与环境后，可改用离线模式；本地模式暂不支持上述增强选项：
 
-为了让主文档保持清爽，各个维度的实现细节与排错记录已归档至独立文档中：
+```bash
+bash start_streaming_dictation.sh --backend local \
+  --receiver "$PWD/artifacts/receiver-build/target/debug/atvvoice"
+```
 
-- 🛠️ [本地构建与运行指引 (BUILD_RUN.md)](BUILD_RUN.md)：Rust 局部 Sysroot 准备、D-Bus 动态链接、Python 虚拟环境恢复与 Systemd 临时单元托管。
-- 🎙️ [流式听写架构设计 (STREAMING.md)](STREAMING.md)：Qwen 核心依赖清单、录音分块处理与推理性能评测数据。
-- 🖥️ [灵动岛悬浮预览规范 (FLOATING_PREVIEW.md)](FLOATING_PREVIEW.md)：PyQt6 胶囊动效、能量柱绘制与 Wayland 下非抢占焦点的实现细节。
-- 🔍 [接收器修复与协议分析 (RECEIVER_FIX.md)](RECEIVER_FIX.md)：ATVV 1.0 协议包重放、AUDIO_START 状态机复位与时钟同步修复过程。
-- 📊 [ASR 选型与对比报告](report_asr_comparison.py)：Qwen3-ASR 与 Whisper medium 在遥控器音频条件下的 CER / 延迟横向对比。
-- ⚖️ [开发与审查规范 (AGENTS.md)](AGENTS.md)：环境边界、红线操作约束与测试验证准则。
+### 4. 实际使用与验收
 
----
+1. `PCM_READY` / `READY` 表示本地收音链路准备完成，云端鉴权和转写仍需实际按住说话后验证。
+2. 点击一个临时输入框，按住遥控器语音键说话，观察预览。
+3. 说完后松键，确认面板先显示最终文字，输入框只收到一次粘贴，没有自动回车。
+4. 分别用正常音量、小声和办公室背景声测试，检查错字、漏字、字尾和延迟。
+
+## 录音、隐私与验证范围
+
+原始 WAV、转写 TXT 和 JSON 回执保存在被 Git 忽略的 `artifacts/streaming-runtime/sessions/`。这些文件可能包含口述的私人内容，不应随源码提交或公开。增强模式只上传处理后的本次音频，不另行上传原始录音用于二次识别；失败不重传。
+
+当前验证包括合成信号、云端协议模拟、本机 WebSocket、状态机和 Qt 离屏测试。300 ms 尾音与增强参数是否适合你的声音和办公环境，需要真实设备验收，不能由测试通过推定准确率提升。
+
+回执中的 `release_to_final_result_seconds` 记录松键到最终结果可用的时间；`release_to_paste_flow_seconds` 还包括粘贴和剪贴板恢复。它们不等同于文字实际出现在屏幕上的时刻。
+
+早期本地 Qwen 与 Whisper 的对比保存在 [本地模式实现与历史验收](STREAMING.md) 和 [对比报告生成脚本](report_asr_comparison.py) 中。历史样本和配图不代表当前云端模式的速度或准确率。
+
+## 主要文件
+
+| 文件 | 用途 |
+| --- | --- |
+| `start_streaming_dictation.sh` | 云端 / 本地 Qwen 入口及悬浮窗启动 |
+| `streaming_dictation.py` | 按键收音、尾音、最终结果与粘贴流程 |
+| `streaming_qwen.py` | 云端 WebSocket、单次增量上传和结果合并 |
+| `streaming_asr.py` | 本地 Qwen 模型与推理 |
+| `audio_enhancement.py` | 云端可选降噪、自动增益及离线试听工具 |
+| `audio_filter.py` | 独立的固定噪声谱滤波工具，不默认接入听写链路 |
+| `floating_preview.py` | PyQt6 悬浮预览 |
+| `receiver/atvvoice/` | Rust ATVV 接收器源码 |
+
+## 进一步阅读
+
+- [构建与运行](BUILD_RUN.md)：运行资产恢复、云端配置、增强选项及启动检查。
+- [本地模式实现与历史验收](STREAMING.md)：本地推理和早期性能记录。
+- [悬浮预览](FLOATING_PREVIEW.md)：浮窗交互与焦点行为。
+- [按键映射](KEYMAP.md)：设备名兼容及相关配置。
+- [已知问题与审查记录](REVIEW.md)：尚未解决的限制。
+- [开发规范](AGENTS.md)：操作边界与验证要求。
 
 ## 开源协议
 
-本项目接收器子模块及相关代码遵循各子目录指定的开源许可协议（包括 Apache 2.0 / MIT）。详见各子目录说明。
+接收器及相关代码的许可范围以各子目录中的许可证文件为准。

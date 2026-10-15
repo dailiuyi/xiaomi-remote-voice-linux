@@ -6,7 +6,7 @@ import tempfile
 import threading
 import os
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 import urllib.request
 import urllib.error
 
@@ -46,6 +46,53 @@ class StateTests(unittest.TestCase):
 
 
 class EngineTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.runtime = tempfile.TemporaryDirectory()
+        self.runtime_patch = patch('streaming_dictation.RUNTIME', Path(self.runtime.name))
+        self.runtime_patch.start()
+
+    async def asyncTearDown(self):
+        self.runtime_patch.stop()
+        self.runtime.cleanup()
+
+    async def test_confirmed_result_is_visible_while_paste_is_blocked(self):
+        class Model:
+            def transcribe(self, pcm):
+                return '确认后的最终文字', {'transcription_seconds': .01}
+        for fail in (False, True):
+            with self.subTest(paste_failure=fail), ThreadPoolExecutor(max_workers=1) as pool:
+                entered, release = asyncio.Event(), asyncio.Event()
+                updates = []
+                engine = StreamingEngine(Model(), pool, lambda state: updates.append(dict(state)))
+                engine.state_changed('streaming')
+                engine.feed(b'\0\0'*1600)
+                engine.state_changed('connected')
+                pcm = engine.controller.tick(float('inf'))
+                engine.state.finalizing()
+                engine.jobs.put_nowait((1, engine.state.generation, pcm, engine.released_at))
+                async def paste(text):
+                    entered.set()
+                    await release.wait()
+                    if fail:
+                        raise RuntimeError('Synthetic paste failure')
+                with patch('streaming_dictation.LOG'):
+                    task = asyncio.create_task(engine.finals(Path(self.runtime.name), paste))
+                    try:
+                        await asyncio.wait_for(entered.wait(), 2)
+                        self.assertEqual(engine.state.value['phase'], 'final_ready')
+                        self.assertEqual(engine.state.value['final'], '确认后的最终文字')
+                        self.assertNotIn('已发送', engine.state.value['message'])
+                        self.assertEqual(engine.controller.phase.value, 'transcribing')
+                        self.assertGreaterEqual(engine.state.value['metrics']['release_to_final_result_seconds'], 0)
+                        self.assertFalse(any(s['phase'] == 'paste_shortcut_sent' for s in updates))
+                        release.set()
+                        await asyncio.wait_for(engine.jobs.join(), 2)
+                        self.assertEqual(engine.state.value['phase'], 'failed' if fail else 'paste_shortcut_sent')
+                    finally:
+                        release.set()
+                        task.cancel()
+                        await asyncio.gather(task, return_exceptions=True)
+
     async def test_inflight_preview_is_discarded_and_only_final_is_pasted(self):
         entered, release = threading.Event(), threading.Event()
         class Model:

@@ -1,0 +1,2 @@
+# Optional --audio-processing light; matches the existing local ASR environment.
+numpy==1.26.4
